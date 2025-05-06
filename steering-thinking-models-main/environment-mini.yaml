@@ -1,0 +1,18 @@
+name: simple_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - numpy=2.2.5
+  - matplotlib=3.10.1
+  - tqdm=4.67.1
+  - pip
+  - pip:
+      - anthropic==0.50.0
+      - datasets==3.5.1
+      - nnsight==0.4.6
+      - openai==1.76.2
+      - python-dotenv==1.1.0
+      - setuptools==78.1.1
+      - torch==2.7.0
+      - transformers==4.51.3

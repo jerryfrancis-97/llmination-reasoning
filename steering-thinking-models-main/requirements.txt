@@ -1,0 +1,11 @@
+anthropic==0.50.0
+datasets==3.5.1
+matplotlib==3.10.1
+nnsight==0.4.6
+numpy==2.2.5
+openai==1.76.2
+python-dotenv==1.1.0
+setuptools==78.1.1
+torch==2.7.0
+tqdm==4.67.1
+transformers==4.51.3
