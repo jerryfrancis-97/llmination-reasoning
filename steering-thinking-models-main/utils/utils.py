@@ -644,6 +644,19 @@ def process_saved_responses(model_name, n_examples, model, tokenizer, layer):
 
     return all_activations, all_texts, overall_running_mean
 
+def load_simple_model(device="cuda:0", load_in_8bit=False, compute_features=True, normalize_features=True, model_name="deepseek-ai/DeepSeek-R1-Distill-Llama-8B", base_model_name=None):
+    """ Loads only model and tokenizer """
+    model = LanguageModel(model_name, dispatch=True, load_in_8bit=load_in_8bit, device_map=device, torch_dtype=torch.bfloat16)
+    print("Config gen params: ", model.generation_config)
+    # model.generation_config.temperature=None
+    # model.generation_config.top_p=None
+    # model.generation_config.do_sample=False
+    
+    tokenizer = model.tokenizer
+
+    return model, tokenizer, None
+
+
 def load_model_and_vectors(device="cuda:0", load_in_8bit=False, compute_features=True, normalize_features=True, model_name="deepseek-ai/DeepSeek-R1-Distill-Llama-8B", base_model_name=None):
     """
     Load model, tokenizer and mean vectors. Optionally compute feature vectors.

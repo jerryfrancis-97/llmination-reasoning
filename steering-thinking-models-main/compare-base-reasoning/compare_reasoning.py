@@ -379,7 +379,8 @@ if not is_api_model(model_name):
     # Load model using the utils function
     import utils
     print(f"Loading model {model_name}...")
-    model, tokenizer, _ = utils.load_model_and_vectors(device=device, load_in_8bit=False, normalize_features=True, compute_features=False, model_name=model_name)
+    # model, tokenizer, _ = utils.load_model_and_vectors(device=device, load_in_8bit=False, normalize_features=True, compute_features=False, model_name=model_name)
+    model, tokenizer, _ = utils.load_simple_model(device=device, load_in_8bit=False, normalize_features=True, compute_features=False, model_name=model_name)
 
 results = []
 
