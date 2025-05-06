@@ -7,7 +7,7 @@ import sys
 sys.path.append("..")
 
 import dotenv
-dotenv.load_dotenv("../.env")
+dotenv.load_dotenv("../../.env")
 
 import argparse
 import json
@@ -40,6 +40,7 @@ MODEL_CONFIG = {
     # Local Models
     'LOCAL_MODELS': {
         'deepseek-ai/DeepSeek-R1-Distill-Llama-8B': 'DeepSeek-Llama-8B',
+        'deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B': 'DeepSeek-Qwen-1.5B',
         'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B': 'DeepSeek-Qwen-14B',
         'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B': 'DeepSeek-Qwen-32B'
     },
@@ -73,6 +74,10 @@ def is_api_model(model_name):
     """Check if the model is an API model"""
     return model_name in MODEL_CONFIG['API_MODELS']
 
+def is_local_model(model_name):
+    """Check if the model is a local model"""
+    return model_name in MODEL_CONFIG['LOCAL_MODELS']
+
 def is_thinking_model(model_name):
     """Check if the model is a thinking model"""
     # Convert model_name to lowercase for case-insensitive comparison
@@ -101,14 +106,14 @@ def get_label_counts(thinking_process, tokenizer, labels, annotate_response=True
         Please split the following reasoning chain of an LLM into annotated parts using labels and the following format ["label"]...["end-section"]. A sentence should be split into multiple parts if it incorporates multiple behaviours indicated by the labels.
 
         Available labels:
-        0. initializing -> The model is rephrasing the given task and states initial thoughts.
-        1. deduction -> The model is performing a deduction step based on its current approach and assumptions.
-        2. adding-knowledge -> The model is enriching the current approach with recalled facts.
-        3. example-testing -> The model generates examples to test its current approach.
-        4. uncertainty-estimation -> The model is stating its own uncertainty.
-        5. backtracking -> The model decides to change its approach.
-        6. checking -> The model is checking the correctness of its current approach. Provide reason why it wants to check the current approach.
-        7. separate -> If there is a tail that has no annotation using the above labels.
+        ["initializing"] -> The model is rephrasing the given task and states initial thoughts.
+        ["deduction"] -> The model is performing a deduction step based on its current approach and assumptions.
+        ["adding-knowledge"] -> The model is enriching the current approach with recalled facts.
+        ["example-testing"] -> The model generates examples to test its current approach.
+        ["uncertainty-estimation"] -> The model is stating its own uncertainty.
+        ["backtracking"] -> The model decides to change its approach.
+        ["checking"] -> The model is checking the correctness of its current approach. Provide reason why it wants to check the current approach.
+        ["separate"] -> If there is a tail that has no annotation using the above labels.
 
         The reasoning chain to analyze:
         {thinking_process}
@@ -118,10 +123,13 @@ def get_label_counts(thinking_process, tokenizer, labels, annotate_response=True
         <<AcR>> -> Actual Reasoning, the model is trying to solving the problem at this step using first principles and NOT referring/ recalling anything from its knowledge base.
         
         Answer only with the annotated text. Only use the labels and keywords outlined above. 
-        """)
+        """, model="deepseek-r1")
     else:
         annotated_response = thinking_process
     
+    # Get annotations from answer response
+    answer_response = annotated_response.split("</think>")[-1].strip()
+    print("Answer response: ", answer_response)
     # Initialize token counts for each label
     label_counts = {label: 0 for label in labels}
     activity_labels = ["M", "AcR"]
@@ -131,7 +139,7 @@ def get_label_counts(thinking_process, tokenizer, labels, annotate_response=True
     
     # Find all annotated sections
     pattern = r'\["([\w-]+)"\]([^\[]+)'
-    matches = re.finditer(pattern, annotated_response)
+    matches = re.finditer(pattern, answer_response)
     
     # Get tokens for the entire thinking process
     total = 0
@@ -161,13 +169,13 @@ def get_label_counts(thinking_process, tokenizer, labels, annotate_response=True
         for label, count in label_counts.items()
     }
     label_activity_fractions = {
-        f"{label}-{activity_label}": count / activity_label_total if activity_label_total > 0 else 0 
+        f"{label}": count / activity_label_total if activity_label_total > 0 else 0 
         for label, count in label_activity_counts.items()
     }
             
     return label_fractions, label_activity_fractions, annotated_response
 
-def process_chat_response(message, model_name, model, tokenizer, labels):
+def process_chat_response(message, model_name, model, tokenizer, labels, device="cuda"):
     """Process a single message through chat function or model"""
     if is_api_model(model_name) and not is_thinking_model(model_name):
         # API model case (OpenAI models)
@@ -194,7 +202,7 @@ def process_chat_response(message, model_name, model, tokenizer, labels):
         print(response)
 
     elif is_local_model(model_name):       
-        input_ids = tokenizer.apply_chat_template([message], add_generation_prompt=True, return_tensors="pt").to("cuda")
+        input_ids = tokenizer.apply_chat_template([message], add_generation_prompt=True, return_tensors="pt").to(device)
                         
         with model.generate(
             input_ids,
@@ -212,7 +220,8 @@ def process_chat_response(message, model_name, model, tokenizer, labels):
     except ValueError:
         think_end = len(response)
     thinking_process = response[think_start:think_end].strip()
-    
+    print("Thinking process: ", thinking_process)
+
     label_fractions, label_activity_fractions, annotated_response = get_label_counts(thinking_process, tokenizer, labels)
     
     return {
@@ -401,7 +410,7 @@ else:
     # Process responses
     for message in tqdm(selected_messages, desc=f"Processing examples for {model_name}"):
         # Process response
-        result = process_chat_response(message, model_name, model, tokenizer, labels)
+        result = process_chat_response(message, model_name, model, tokenizer, labels, device=device)
         results.append(result)
     
     # Save results
@@ -411,7 +420,10 @@ else:
     # Clean up model to free memory
     if model is not None:
         del model
-        torch.cuda.empty_cache()
+        if device.startswith("cuda"):
+            torch.cuda.empty_cache()
+        elif device == "cpu":
+            pass  # No cache clearing needed for CPU
 
 # %% Generate visualization with all available models
 # if not args.skip_viz:

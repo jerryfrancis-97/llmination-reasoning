@@ -1,5 +1,5 @@
 import dotenv
-dotenv.load_dotenv("../.env")
+dotenv.load_dotenv("../../.env")
 
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -36,7 +36,7 @@ def chat(prompt, model="gpt-4.1", max_tokens=28000):
     elif model in ["claude-3-opus", "claude-3-7-sonnet", "claude-3-5-haiku"]:
         model_provider = "anthropic"
         client = anthropic.Anthropic()
-    elif model in ["deepseek-v3", "gemini-2-0-think", "gemini-2-0-flash", "deepseek-r1"]:
+    elif model in ["deepseek-v3", "gemini-2-5-pro", "gemini-2-0-flash", "deepseek-r1"]:
         model_provider = "openrouter"
         client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
@@ -123,10 +123,10 @@ def chat(prompt, model="gpt-4.1", max_tokens=28000):
             elif model_provider == "openrouter":
                 # Map model names to OpenRouter model IDs
                 model_mapping = {
-                    "deepseek-r1": "deepseek/deepseek-r1",
-                    "deepseek-v3": "deepseek/deepseek-chat",
-                    "gemini-2-0-think": "google/gemini-2.0-flash-thinking-exp:free",
-                    "gemini-2-0-flash": "google/gemini-2.0-flash-001"
+                    "deepseek-r1": "deepseek/deepseek-r1:free",
+                    "deepseek-v3": "deepseek/deepseek-chat:free",
+                    "gemini-2-5-pro": "google/gemini-2.5-pro-exp-03-25",
+                    "gemini-2-0-flash": "google/gemini-2.0-flash-exp:free"
                 }
                 
                 response = client.chat.completions.create(
@@ -152,7 +152,7 @@ def chat(prompt, model="gpt-4.1", max_tokens=28000):
             
         except Exception as e:
             print(f"Error: {e}")
-            time.sleep(20)
+            time.sleep(3)
 
     return None
 
@@ -647,10 +647,9 @@ def process_saved_responses(model_name, n_examples, model, tokenizer, layer):
 def load_simple_model(device="cuda:0", load_in_8bit=False, compute_features=True, normalize_features=True, model_name="deepseek-ai/DeepSeek-R1-Distill-Llama-8B", base_model_name=None):
     """ Loads only model and tokenizer """
     model = LanguageModel(model_name, dispatch=True, load_in_8bit=load_in_8bit, device_map=device, torch_dtype=torch.bfloat16)
-    print("Config gen params: ", model.generation_config)
-    # model.generation_config.temperature=None
-    # model.generation_config.top_p=None
-    # model.generation_config.do_sample=False
+    model.generation_config.temperature=None
+    model.generation_config.top_p=None
+    model.generation_config.do_sample=False
     
     tokenizer = model.tokenizer
 
