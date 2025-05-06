@@ -36,12 +36,19 @@ def chat(prompt, model="gpt-4.1", max_tokens=28000):
     elif model in ["claude-3-opus", "claude-3-7-sonnet", "claude-3-5-haiku"]:
         model_provider = "anthropic"
         client = anthropic.Anthropic()
-    elif model in ["deepseek-v3", "gemini-2-5-pro", "gemini-2-0-flash", "deepseek-r1"]:
+    elif model in ["deepseek-v3", "deepseek-r1"]:
         model_provider = "openrouter"
         client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"),
         )
+    elif model in ["gemini-2-5-pro", "gemini-2-5-flash", "gemini-2-0-flash"]:
+        model_provider = "gemini-api"
+        client = OpenAI(
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=os.getenv("GEMINI_API_KEY"),
+        )
+
 
     # try 3 times with 3 second sleep between attempts
     for _ in range(3):
@@ -125,8 +132,6 @@ def chat(prompt, model="gpt-4.1", max_tokens=28000):
                 model_mapping = {
                     "deepseek-r1": "deepseek/deepseek-r1:free",
                     "deepseek-v3": "deepseek/deepseek-chat:free",
-                    "gemini-2-5-pro": "google/gemini-2.5-pro-exp-03-25",
-                    "gemini-2-0-flash": "google/gemini-2.0-flash-exp:free"
                 }
                 
                 response = client.chat.completions.create(
@@ -149,6 +154,30 @@ def chat(prompt, model="gpt-4.1", max_tokens=28000):
                     return f"<think>{thinking_response}\n</think>\n{answer_response}"
                 else:
                     return response.choices[0].message.content
+
+            elif model_provider == "gemini-api":
+                model_mapping = {
+                    "gemini-2-5-pro": "gemini-2.5-pro-exp-03-25", # 25 RPD
+                    "gemini-2-5-flash": "gemini-2.5-flash-preview-04-17", #500 RPD
+                    "gemini-2-0-flash": "gemini-2.0-flash" #1.5k RPD rate limit
+                }
+                response = client.chat.completions.create(
+                    model=model_mapping[model],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": prompt,
+                                },
+                            ],
+                        }
+                    ],
+                    max_completion_tokens=max_tokens,
+                    temperature=1e-19,
+                )
+                return response.choices[0].message.content
             
         except Exception as e:
             print(f"Error: {e}")

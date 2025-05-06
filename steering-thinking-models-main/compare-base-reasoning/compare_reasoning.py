@@ -123,7 +123,7 @@ def get_label_counts(thinking_process, tokenizer, labels, annotate_response=True
         <<AcR>> -> Actual Reasoning, the model is trying to solving the problem at this step using first principles and NOT referring/ recalling anything from its knowledge base.
         
         Answer only with the annotated text. Only use the labels and keywords outlined above. 
-        """, model="deepseek-r1")
+        """, model="gemini-2-0-flash")
     else:
         annotated_response = thinking_process
     
@@ -140,7 +140,7 @@ def get_label_counts(thinking_process, tokenizer, labels, annotate_response=True
     # Find all annotated sections
     pattern = r'\["([\w-]+)"\]([^\[]+)'
     matches = re.finditer(pattern, answer_response)
-    
+
     # Get tokens for the entire thinking process
     total = 0
     activity_label_total = 0
