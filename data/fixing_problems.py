@@ -4,19 +4,20 @@ import os
 import google.generativeai as genai
 from google.api_core import retry
 import time
+from tqdm import tqdm
 
 # Configuration
 JSONL_FILE_PATH = "math_problems.jsonl"  # Update with your actual JSONL file path
-CONCEPT = "Number Theory"  # Target concept
+CONCEPTS = ["Number Theory", "Intermediate Algebra", "Algebra", "Precalculus", "Prealgebra", "Geometry", "Counting & Probability"]  # Target concept
 DIFFICULTY_LEVEL = 5       # Target difficulty level
-OUTPUT_FILE = "new_modified_math_problems.json"
+OUTPUT_FILE = "new_modified_math_problems_with_question_id.json"
 
 # Prompt template for Gemini
 PROMPT_TEMPLATE = """
 Generate 5 different versions of the following math problem according to these specific categories:
 
 1. Large numbers: Change values to extremely large numbers (e.g., billions or scientific notation)
-2. Impossible context: Create a mathematically impossible or inconsistent version of the problem
+2. Impossible context: Create a mathematically impossible or inconsistent version of the problem using invalid assumptions of key variables in the problem
 3. Ambiguous: Remove key assumptions or make the problem underspecified in a way that is not immediately obvious
 4. Paradox: Create a counter-intuitive or paradoxical version
 5. Irrelevant info: Add numerical extraneous details related to the problem context but unrelated to the solution
@@ -76,7 +77,7 @@ def filter_problems(data, subject, level):
     """Filter problems by subject and level"""
     return [item for item in data 
             if item.get('subject', '').lower() == subject.lower() 
-            and item.get('level', 0) == level]
+            if item.get('level', 0) == level]
 
 def generate_modified_versions(problem_data, api_key):
     """Generate modified versions of a problem using Gemini API"""
@@ -85,10 +86,10 @@ def generate_modified_versions(problem_data, api_key):
     model = genai.GenerativeModel('gemini-1.5-flash')
     
     problem_text = problem_data.get('problem', '')
-    
+    # avoid \espace problems
+    problem_text = problem_text.replace("\\", "\\\\")
     # Prepare the prompt with the problem
     prompt = PROMPT_TEMPLATE.format(problem=problem_text)
-    
     try:
         # Generate response with retry mechanism
         attempts = 0
@@ -112,6 +113,7 @@ def generate_modified_versions(problem_data, api_key):
                 
                 # Clean up the response to get just the JSON part
                 response_text = response_text.strip()
+                response_text = response_text.replace("//", "////")
                 
                 # Find JSON array in the text
                 start_idx = response_text.find('[')
@@ -132,6 +134,11 @@ def generate_modified_versions(problem_data, api_key):
                                 "level": problem_data.get("level", 0),
                                 "unique_id": problem_data.get("unique_id", "")
                             })
+                            # Add question_id based on problem type
+                            problem_types = ["large_numbers", "impossible_context", "ambiguous", "paradox", "irrelevant_info"]
+                            type_index = problem_types.index(version["problem_type"])
+                            version["question_id"] = version["unique_id"].split(".")[0].split("/")[-1] + str(type_index)
+
                         return modified_versions
                     else:
                         print(f"Expected 5 versions, got {len(modified_versions) if isinstance(modified_versions, list) else 'not a list'}")
@@ -170,7 +177,7 @@ def main():
     print("Available models:")
     for model in models:
         print(f" - {model.name}: {model.display_name}")
-
+    
     # Check if file exists
     if not os.path.exists(JSONL_FILE_PATH):
         print(f"Error: File not found at {JSONL_FILE_PATH}")
@@ -182,22 +189,21 @@ def main():
     print(f"Loaded {len(all_problems)} problems")
     
     # Filter for number theory problems at level 5
-    filtered_problems = filter_problems(all_problems, CONCEPT, DIFFICULTY_LEVEL)
-    print(f"Found {len(filtered_problems)} problems in {CONCEPT} at level {DIFFICULTY_LEVEL}")
+    filtered_problems = []
+    for concept in CONCEPTS:
+        concept_problems = filter_problems(all_problems, concept, DIFFICULTY_LEVEL)
+        filtered_problems.extend(concept_problems)
+        print(f"Found {len(concept_problems)} problems in {concept} at level {DIFFICULTY_LEVEL}")
     
     if not filtered_problems:
         print("No matching problems found. Try different criteria.")
         return
-    
+    else:
+        print(f"Found {len(filtered_problems)} problems in total.")
     # Process each problem
     all_modified_problems = []
-    for i, problem in enumerate(filtered_problems):
-
-        if i==2:
-            break
-        
-        print(f"\nProcessing problem {i+1}/{len(filtered_problems)}:")
-        print(f"ID: {problem.get('unique_id', 'Unknown')}")
+    for problem in tqdm(filtered_problems, desc="Processing problems"):
+        print(f"\nID: {problem.get('unique_id', 'Unknown')}")
         print("Problem excerpt:", problem.get('problem', '')[:100] + "..." if len(problem.get('problem', '')) > 100 else problem.get('problem', ''))
         
         # Generate modified versions
@@ -208,6 +214,13 @@ def main():
             print(f"Successfully generated {len(modified_versions)} versions")
         else:
             print("Failed to generate modified versions for this problem")
+            
+    # Track failed problems
+    failed_problems = [p['unique_id'] for p in filtered_problems if not any(m.get('unique_id') == p['unique_id'] for m in all_modified_problems)]
+    if failed_problems:
+        print("\nThe following problems failed to generate modifications:")
+        for problem_id in failed_problems:
+            print(f" - {problem_id}")
 
     
     # Save results
