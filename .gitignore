@@ -1,4 +1,5 @@
 .env
+.env.txt
 env-setup.txt
 gitmodules_temp.txt
 jerome.pem
