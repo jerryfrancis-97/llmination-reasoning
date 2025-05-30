@@ -1059,18 +1059,28 @@ class LLMReasoningFramework:
                     for model_config in self.models:
                         try:
                             # Query model
-                            response = self.query_model(
-                                prompt_text,
-                                model_config["api"],
-                                model_config["model"],
-                                model_config.get("temperature", 0.0)
-                            )
-                            print("response", response)
-                            
-                            
-                            if "Error" in response["text"]:
-                                print(f"\nError with prompt {prompt_id}: {response['text']}")
-                                continue
+                            while True:
+                                response = self.query_model(
+                                    prompt_text,
+                                    model_config["api"],
+                                    model_config["model"],
+                                    model_config.get("temperature", 0.0)
+                                )
+                                print("response", response)
+                                
+                                if "Error" in response["text"]:
+                                    if "rate_limit_exceeded" in response["text"]:
+                                        error_msg = json.loads(response["text"])["error"]["message"]
+                                        wait_time_match = re.search(r"try again in (\d+)m(\d+\.\d+)s", error_msg)
+                                        if wait_time_match:
+                                            minutes = int(wait_time_match.group(1))
+                                            seconds = float(wait_time_match.group(2))
+                                            print(f"\nRate limit reached for prompt {prompt_id}. Need to wait {minutes}m {seconds:.2f}s before retrying.")
+                                            time.sleep(minutes * 60 + seconds)
+                                            continue
+                                    print(f"\nError with prompt {prompt_id}: {response['text']}")
+                                    break
+                                break
                             
                             prepared_response = response["text"].replace("\\","\\\\")
                             # Parse response as a whole
@@ -1132,10 +1142,10 @@ class LLMReasoningFramework:
 if __name__ == "__main__":
     # Example usage
     models = [
-        {"api": "groq", "model": "llama-3.3-70b-versatile", "temperature": 0.0},
-        {"api": "groq", "model": "deepseek-r1-distill-llama-70b", "temperature": 0.0},
-        # {"api": "gemini", "model": "gemini-2.0-flash", "temperature": 0.0},
-        # {"api": "gemini", "model": "gemini-1.5-flash", "temperature": 0.0},
+        # {"api": "groq", "model": "llama-3.3-70b-versatile", "temperature": 0.0},
+        # {"api": "groq", "model": "deepseek-r1-distill-llama-70b", "temperature": 0.0},
+        {"api": "gemini", "model": "gemini-2.0-flash", "temperature": 0.0},
+        {"api": "gemini", "model": "gemini-1.5-flash", "temperature": 0.0},
         # # {"api": "gemini", "model": "gemini-1.5-pro", "temperature": 0.0},
         # {"api": "gemini", "model": "gemini-2.0-flash-thinking-exp", "temperature": 0.0},
         # {"api": "mistral", "model": "mistral-large-latest", "temperature": 0.0},
