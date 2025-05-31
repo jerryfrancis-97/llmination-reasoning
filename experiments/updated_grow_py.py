@@ -195,7 +195,7 @@ class LLMReasoningFramework:
             }
         
         # Clean up model name
-        model = model.lower().replace("-8192", "").replace("-32768", "")
+        # model = model.lower().replace("-8192", "").replace("-32768", "")
         if model not in GROQ_MODELS:
             return {
                 "text": f"Error: Invalid model name. Available models: {', '.join(GROQ_MODELS)}",
