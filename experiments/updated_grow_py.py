@@ -32,7 +32,7 @@ CHAIN_OF_THOUGHT_PROMPT = "\n\nBefore answering, walk through your reasoning ste
 GROQ_MODELS = [
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
-    "llama3-70b-8192",
+    "llama3-70b-8192", #llama3-70b-instruct HF
     "llama3-8b-8192",
     "gemma2-9b-it",
     "qwen-qwq-32b",
@@ -1143,9 +1143,10 @@ if __name__ == "__main__":
     # Example usage
     models = [
         # {"api": "groq", "model": "llama-3.3-70b-versatile", "temperature": 0.0},
+        {"api": "groq", "model": "llama3-70b-8192", "temperature": 0.0},
         # {"api": "groq", "model": "deepseek-r1-distill-llama-70b", "temperature": 0.0},
-        {"api": "gemini", "model": "gemini-2.0-flash", "temperature": 0.0},
-        {"api": "gemini", "model": "gemini-1.5-flash", "temperature": 0.0},
+        # {"api": "gemini", "model": "gemini-2.0-flash", "temperature": 0.0},
+        # {"api": "gemini", "model": "gemini-1.5-flash", "temperature": 0.0},
         # # {"api": "gemini", "model": "gemini-1.5-pro", "temperature": 0.0},
         # {"api": "gemini", "model": "gemini-2.0-flash-thinking-exp", "temperature": 0.0},
         # {"api": "mistral", "model": "mistral-large-latest", "temperature": 0.0},
