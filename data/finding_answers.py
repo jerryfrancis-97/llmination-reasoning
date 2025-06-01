@@ -151,13 +151,6 @@ def get_problem_solution(problem_text, api_key):
                     print(f"Error extracting fields: {str(e)}")
                     solution_data = None
                 
-                # print("solution_data", solution_data)
-                # Add response_text to solution_data
-                # response_text = json.dumps(response_text)[1:-1]
-                
-                # print(response_text)
-                # solution_data["response_text"] = response_text
-                
                 # Verify we have all required fields
                 if all(solution_data.get(field) for field in ["final_answer", "reasoning", "solution_code"]):
                     return solution_data

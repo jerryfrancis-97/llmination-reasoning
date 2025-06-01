@@ -17,7 +17,6 @@ import google.generativeai as genai
 from tqdm import tqdm
 from groq import Groq  # Add Groq client import
 from mistralai import Mistral  # Updated Mistral import
-# from mistralai.models.chat import ChatMessage # Add Mistral chat message import
 
 # Load environment variables
 load_dotenv("../.env")
@@ -44,24 +43,6 @@ MISTRAL_MODELS = [
     "mistral-large-latest"
 ]
 
-# Test questions to verify reasoning vs recall
-# VERIFICATION_QUESTIONS = [
-#     # Mathematical problems with big numbers (requiring computation, not memorization)
-#     {"id": "math_big_1", "text": "What is 91847 × 63529? Show your work."},
-#     {"id": "math_big_2", "text": "If you multiply 12345 by 67890, what are the last three digits of the result?"},
-    
-#     # Logical puzzles with irrelevant details
-#     {"id": "logic_irrel_1", "text": "Alice, who loves the color blue and has three cats, needs to arrange 8 books on a shelf. Bob, who is allergic to peanuts, suggests she arrange them by height. If each arrangement is equally likely, what is the probability that the books will be arranged in ascending height order from left to right?"},
-#     {"id": "logic_irrel_2", "text": "In a village where the baker makes excellent croissants every Tuesday, there are 7 houses in a row numbered 1 through 7. If each house must be painted either red, blue, or green, and no two adjacent houses can be the same color, how many different ways can the houses be painted?"},
-    
-#     # Questions with misleading context
-#     {"id": "mislead_1", "text": "While many people believe the Earth's core is made of molten iron, we now know it actually consists primarily of solid material. Given this information, what is the approximate temperature at the center of the Earth in degrees Celsius?"},
-#     {"id": "mislead_2", "text": "Despite common belief that Einstein developed the theory of relativity, many historians argue his wife Mileva Marić deserves equal credit. Based on Einstein's famous equation, calculate the energy released when 5 grams of matter is completely converted to energy."},
-    
-#     # Novel problems requiring reasoning
-#     {"id": "novel_1", "text": "If a new element called Anthropium has a half-life of 3 hours and you start with 128 grams, how much will remain after 15 hours?"},
-#     {"id": "novel_2", "text": "In the fictional Zorbulian number system, the digit symbols are Δ=0, Γ=1, Λ=2, Φ=3, Ω=4, and Ψ=5. The number system works like decimal except it's base-6. What is ΓΨΩ₆ multiplied by ΛΦ₆ in the Zorbulian system?"}
-# ]
 
 class LLMReasoningFramework:
     def __init__(self, models: List[Dict[str, Any]] = None):
@@ -73,11 +54,7 @@ class LLMReasoningFramework:
         """
         self.models = models or []
         # Updated results DataFrame columns
-        self.results_df = pd.DataFrame(columns=[
-            # "question_id", "modified_problem", "problem_type", "subject", "level", "api", "model", 
-            # "answer", "chain_of_thought", "reasoning_type", "confidence", 
-            # "response_time", "timestamp"
-        ])
+        self.results_df = pd.DataFrame()
         self.retry_delay = 5  # seconds to wait between retries
         self.max_retries = 3  # maximum number of retries per API call
         
@@ -170,39 +147,12 @@ class LLMReasoningFramework:
                                         "level": item["level"],
                                     })
                                    
-                        # # Handle dict with prompts array
-                        # elif isinstance(data, dict) and "prompts" in data:
-                        #     for i, item in enumerate(data["prompts"]):
-                        #         if isinstance(item, dict) and "text" in item:
-                        #             prompts.append({
-                        #                 "id": item.get("id", f"prompt_{i}"),
-                        #                 "text": item["text"]
-                        #             })
-                
-            # # Handle direct question input
-            # elif "?" in input_data:  
-            #     prompts.append({"id": "prompt_direct", "text": input_data})
-            
-            # # Handle list of strings (direct questions)
-            # elif isinstance(input_data, list):
-            #     for i, item in enumerate(input_data):
-            #         if isinstance(item, str):
-            #             prompts.append({"id": f"prompt_{i}", "text": item})
-            #         elif isinstance(item, dict) and "text" in item:
-            #             prompts.append({
-            #                 "id": item.get("id", f"prompt_{i}"),
-            #                 "text": item["text"]
-            #             })
     
         except Exception as e:
             print(f"Error loading prompts: {e}")
             traceback.print_exc()
             return []
             
-        # Add verification questions if we have prompts
-        # if prompts:
-        #     prompts.append({"id": "------ Verification Questions Below ------", "text": "Separator"})
-        #     prompts.extend(VERIFICATION_QUESTIONS)
             
         return prompts
     
@@ -525,64 +475,6 @@ class LLMReasoningFramework:
                         break
                 except:
                     continue
-        # # Look for the reasoning label (usually at the end)
-        # for label in reasoning_labels:
-        #     if label in response_text:
-        #         # Find the last occurrence of the label
-        #         label_pos = response_text.rfind(label)
-        #         if label_pos > 0:
-        #             # Extract content before the label as the answer
-        #             potential_answer = response_text[:label_pos].strip()
-        #             reasoning_type = label
-                    
-        #             # Only update if it makes sense (not cutting off too much)
-        #             if len(potential_answer) > len(response_text) * 0.7:
-        #                 final_answer = potential_answer
-        #             break
-        
-        # # If we didn't find a clear label, look for the last line containing any label
-        # if not reasoning_type:
-        #     lines = response_text.split('\n')
-        #     for line in reversed(lines):
-        #         line = line.strip()
-        #         for label in reasoning_labels:
-        #             if label in line:
-        #                 reasoning_type = label
-        #                 # Remove the line containing the label
-        #                 final_answer = '\n'.join([l for l in lines if label not in l]).strip()
-        #                 break
-        #         if reasoning_type:
-        #             break
-        
-        # # Look for confidence percentage
-        # confidence_pattern = r'(\d{1,3})%'
-        # confidence_match = re.search(confidence_pattern, response_text)
-        # if confidence_match:
-        #     try:
-        #         confidence_value = int(confidence_match.group(1))
-        #         if 0 <= confidence_value <= 100:
-        #             confidence = confidence_value
-                    
-        #             # Clean up the final answer by removing confidence statement
-        #             confidence_line_pattern = r'\n.*\d{1,3}%.*$'
-        #             final_answer = re.sub(confidence_line_pattern, '', final_answer)
-        #     except:
-        #         pass
-        
-        # # If still not found, set defaults
-        # if not reasoning_type:
-        #     reasoning_type = "Unknown"
-        
-        # # Clean up any remaining meta-prompt instructions
-        # cleanup_patterns = [
-        #     r'For the answer above, classify your reasoning as one of.*',
-        #     r'On a scale of 0-100%, how confident are you in your answer.*',
-        #     r'Before answering, walk through your reasoning step by step.*'
-        # ]
-        
-        # for pattern in cleanup_patterns:
-        #     final_answer = re.sub(pattern, '', final_answer, flags=re.IGNORECASE)
-        #     chain_of_thought = re.sub(pattern, '', chain_of_thought, flags=re.IGNORECASE)
         
         # Final cleanup
         final_answer = final_answer.strip()
@@ -590,152 +482,6 @@ class LLMReasoningFramework:
         print("output", final_answer, chain_of_thought, reasoning_type, confidence)
 
         return final_answer, chain_of_thought, reasoning_type, confidence
-    
-    # def verify_reasoning(self, prompt_id: str, prompt_text: str, answer: str, chain_of_thought: str) -> str:
-    #     """
-    #     Apply verification checks to determine if the answer demonstrates true reasoning.
-        
-    #     Args:
-    #         prompt_id: ID of the prompt
-    #         prompt_text: The prompt text
-    #         answer: Model's answer
-    #         chain_of_thought: The reasoning process
-            
-    #     Returns:
-    #         Verification result string
-    #     """
-    #     # Default result
-    #     result = "Unknown"
-        
-    #     # Special checks for verification questions
-    #     if any(vq["id"] == prompt_id for vq in VERIFICATION_QUESTIONS):
-    #         # Mathematical calculations check
-    #         if "math_big" in prompt_id:
-    #             # Check if the workings match the answer for multiplication problems
-    #             if "×" in prompt_text or "multiply" in prompt_text.lower():
-    #                 # Extract numbers from the question
-    #                 numbers = re.findall(r'\d+', prompt_text)
-    #                 if len(numbers) >= 2:
-    #                     try:
-    #                         num1 = int(numbers[0])
-    #                         num2 = int(numbers[1])
-    #                         expected_result = num1 * num2;
-                            
-    #                         # Check if the correct result appears in the answer
-    #                         if str(expected_result) in answer:
-    #                             # Check if there's evidence of calculation steps
-    #                             if chain_of_thought and (
-    #                                 "multiply" in chain_of_thought.lower() or 
-    #                                 "×" in chain_of_thought or 
-    #                                 "*" in chain_of_thought
-    #                             ):
-    #                                 result = "Verified Reasoning"
-    #                             else:
-    #                                 result = "Correct Answer, Uncertain Process"
-    #                         else:
-    #                             result = "Incorrect"
-    #                     except:
-    #                         result = "Calculation Error"
-            
-    #         # Logical puzzles with irrelevant details
-    #         elif "logic_irrel" in prompt_id:
-    #             # Check if irrelevant details were ignored
-    #             irrelevant_details = {
-    #                 "logic_irrel_1": ["blue", "cats", "allergic", "peanuts"],
-    #                 "logic_irrel_2": ["baker", "croissants", "Tuesday"]
-    #             }
-                
-    #             # If chain of thought focuses on irrelevant details, mark it
-    #             if prompt_id in irrelevant_details:
-    #                 irrelevant_mentions = sum(1 for detail in irrelevant_details[prompt_id] 
-    #                                        if detail.lower() in chain_of_thought.lower())
-                    
-    #                 if irrelevant_mentions > 1:
-    #                     result = "Distracted by Irrelevant Details"
-    #                 else:
-    #                     # Check for correct answer patterns
-    #                     correct_answers = {
-    #                         "logic_irrel_1": ["1/40320", "1/8!", "0.0000248"],
-    #                         "logic_irrel_2": ["32", "thirty-two", "thirty two"]
-    #                     }
-                        
-    #                     if any(ans.lower() in answer.lower() for ans in correct_answers.get(prompt_id, [])):
-    #                         result = "Verified Reasoning"
-    #                     else:
-    #                         result = "Incorrect"
-            
-    #         # Questions with misleading context
-    #         elif "mislead" in prompt_id:
-    #             # Check if model was misled
-    #             if "mislead_1" in prompt_id:
-    #                 # True core temp is ~5000-6000°C
-    #                 temps = re.findall(r'(\d+)[,.]?(\d*)\s*(?:degrees|°)?\s*[Cc]', answer)
-    #                 if temps:
-    #                     try:
-    #                         temp = float(temps[0][0] + "." + (temps[0][1] or "0"))
-    #                         if 4000 <= temp <= 7000:
-    #                             # Correct despite misleading context
-    #                             result = "Resisted Misleading Context"
-    #                         else:
-    #                             result = "Misled by Context"
-    #                     except:
-    #                         result = "Parsing Error"
-                
-    #             elif "mislead_2" in prompt_id:
-    #                 # E=mc² calculation for 5g
-    #                 # Correct answer is around 4.5 × 10^14 J
-    #                 if "4.5" in answer and ("10" in answer or "^" in answer or "14" in answer):
-    #                     result = "Resisted Misleading Context"
-    #                 else:
-    #                     # Check if answer mentions Marić or credits dispute
-    #                     if "marić" in answer.lower() or "maric" in answer.lower():
-    #                         result = "Misled by Context"
-    #                     else:
-    #                         result = "Incomplete"
-            
-    #         # Novel problems requiring reasoning
-    #         elif "novel" in prompt_id:
-    #             if "novel_1" in prompt_id:  # Half-life problem
-    #                 # Correct answer: 128 * (1/2)^5 = 4 grams
-    #                 if "4" in answer and "gram" in answer.lower():
-    #                     if chain_of_thought and (
-    #                         "half-life" in chain_of_thought.lower() or
-    #                         "halve" in chain_of_thought.lower() or
-    #                         "divide by 2" in chain_of_thought.lower() or
-    #                         "/2" in chain_of_thought
-    #                     ):
-    #                         result = "Novel Reasoning Verified"
-    #                     else:
-    #                         result = "Correct Answer, Uncertain Process"
-    #             else:  # Fictional number system
-    #                 # This requires true reasoning as it can't be memorized
-    #                 if "ΓΩΛ" in answer or "ΓΩΛ₆" in answer:
-    #                     result = "Novel Reasoning Verified"
-    #                 else:
-    #                     result = "Incorrect or Unverifiable"
-        
-    #     # For regular prompts, apply general heuristics
-    #     else:
-    #         # Check for evidence of reasoning in chain of thought
-    #         if chain_of_thought:
-    #             # Look for mathematical operations
-    #             math_indicators = ["+", "-", "*", "/", "=", "equals", "sum", "product", "quotient", "calculate"]
-    #             logical_indicators = ["if", "then", "because", "therefore", "thus", "hence", "since", "given that"]
-                
-    #             math_evidence = any(indicator in chain_of_thought for indicator in math_indicators)
-    #             logical_evidence = any(indicator in chain_of_thought for indicator in logical_indicators)
-                
-    #             if math_evidence and logical_evidence:
-    #                 result = "Strong Reasoning Evidence"
-    #             elif math_evidence or logical_evidence:
-    #                 result = "Moderate Reasoning Evidence"
-            
-    #         # If answer contains references to general knowledge
-    #         knowledge_indicators = ["known", "according to", "studies show", "research", "commonly", "typically"]
-    #         if any(indicator in answer.lower() for indicator in knowledge_indicators):
-    #             result = "Likely Recall"
-        
-    #     return result
     
     def log_result(self, question_id: Any, modified_problem: str, api: str, model: str, 
                   final_answer: str, chain_of_thought: str, reasoning_type: str, 
@@ -779,9 +525,6 @@ class LLMReasoningFramework:
         # Convert metrics dicts to dataframes
         count_metrics_df = pd.DataFrame([reasoning_count_metrics])
         pct_metrics_df = pd.DataFrame([reasoning_pct_metrics])
-        # print(count_metrics_df.columns)
-        # print(pct_metrics_df.columns)
-        # breakpoint()
         
         # Create base dataframe
         new_row = pd.DataFrame({
@@ -808,8 +551,6 @@ class LLMReasoningFramework:
             new_row[col] = count_metrics_df[col]
         for col in pct_metrics_df.columns:
             new_row[col] = pct_metrics_df[col]
-        # print(new_row.columns)
-        # breakpoint()
         # Add to DataFrame
         self.results_df = pd.concat([self.results_df, new_row], ignore_index=True, sort=False)
 
@@ -977,24 +718,12 @@ class LLMReasoningFramework:
                 if match:
                     final_answer = match.group(1).strip() if len(match.groups()) == 1 else match.group(0).strip()
                     break
-            # print("final_answerregex")
-        # print("final_answer", final_answer)
         return annotations, final_answer, metrics
 
     def compute_reasoning_metrics(self, annotations, final_answer, original_text, metrics):
         """
         Compute the reasoning metrics.
         """
-        # result = "\n==== ORIGINAL REASONING ====\n"
-        # result += original_text
-
-        # result += "\n\n==== ANNOTATED REASONING ====\n"
-        # for ann in annotations:
-        #     result += ann + "\n"
-
-        # if final_answer:
-        #     result += "\n==== FINAL ANSWER ====\n"
-        #     result += final_answer
 
         # Calculate reasoning pattern metrics and indicators
         total_indicators = sum(metrics.values()) - metrics["total_sentences"]
@@ -1031,19 +760,6 @@ class LLMReasoningFramework:
         elif indicator_metrics_dict["exploration_pct"] > 15:
             indicator_metrics_dict["secondary_approach"] = " with Exploration"
 
-        # result += "\n\n==== REASONING ANALYSIS ====\n"
-        # result += f"Memorization indicators: {metrics['memorization_count']} ({indicator_metrics_dict['memorization_pct']:.1f}%)\n"
-        # result += f"Reasoning indicators: {metrics['reasoning_count']} ({indicator_metrics_dict['reasoning_pct']:.1f}%)\n"
-        # result += f"Exploration indicators: {metrics['exploration_count']} ({indicator_metrics_dict['exploration_pct']:.1f}%)\n"
-        # result += f"Uncertainty indicators: {metrics['uncertainty_count']} ({indicator_metrics_dict['uncertainty_pct']:.1f}%)\n"
-        # result += f"Computation indicators: {metrics['computation_count']} ({indicator_metrics_dict['computation_pct']:.1f}%)\n"
-        # result += f"Total sentences: {metrics['total_sentences']}\n\n"
-
-        # result += f"Primary approach: {indicator_metrics_dict['primary_approach']}{indicator_metrics_dict['secondary_approach']}\n\n"
-
-        # Add detailed interpretation
-        # result += "==== INTERPRETATION ====\n"
-        
         # Store interpretation in dict
         # Build up interpretation string
         interpretation = ""
@@ -1067,11 +783,7 @@ class LLMReasoningFramework:
         # Store final interpretation
         indicator_metrics_dict["interpretation"] = interpretation
 
-        # result += indicator_metrics_dict["interpretation"] + "\n"
-
         # Generate and store overall assessment
-        # result += "\n==== LIKELIHOOD OF MEMORIZATION VS. REASONING ====\n"
-
         if indicator_metrics_dict["memorization_pct"] > 30 and indicator_metrics_dict["uncertainty_pct"] < 10:
             indicator_metrics_dict["likelihood_assessment"] = "HIGH likelihood the model has seen similar problems during training and is recalling patterns."
         elif indicator_metrics_dict["reasoning_pct"] > 30 and (indicator_metrics_dict["exploration_pct"] > 10 or indicator_metrics_dict["uncertainty_pct"] > 10):
@@ -1130,10 +842,6 @@ class LLMReasoningFramework:
                     subject = prompt["subject"]
                     level = prompt["level"]
                     
-                    # # Skip separator
-                    # if "Verification Questions Below" in str(prompt_id):
-                    #     pbar.update(len(self.models))
-                    #     continue
                     
                     for model_config in self.models:
                         try:
@@ -1166,8 +874,6 @@ class LLMReasoningFramework:
                             answer, chain_of_thought, reasoning_type, confidence = self.parse_response(prepared_response)
                             # analyze with reasoning indicators for annotations
                             annotations, final_answer, reasoning_count_metrics, reasoning_pct_metrics = self.analyze_reasoning(prepared_response)
-                            # Verify reasoning
-                            # verification_check = self.verify_reasoning(prompt_id, prompt_text, answer, chain_of_thought)
                             
                             # Log result
                             self.log_result(
@@ -1186,7 +892,6 @@ class LLMReasoningFramework:
                                 problem_type=problem_type,
                                 subject=subject,
                                 level=level,
-                                # verification_check=verification_check
                             )
                             
                         except Exception as e:
@@ -1205,7 +910,6 @@ class LLMReasoningFramework:
         
         for model_config in self.models:
             model_results = self.results_df[self.results_df['model'] == model_config['model']]
-            # print(model_results.columns, "model_results.columns")
             if not model_results.empty:
                 # Create model-specific output file path
                 model_output_file = f"{output_file.rsplit('.', 1)[0]}_{model_config['model']}"
@@ -1221,39 +925,18 @@ class LLMReasoningFramework:
 if __name__ == "__main__":
     # Example usage
     models = [
-        # {"api": "groq", "model": "llama-3.3-70b-versatile", "temperature": 0.0},
         # {"api": "groq", "model": "llama3-70b-8192", "temperature": 0.0},
         # {"api": "groq", "model": "deepseek-r1-distill-llama-70b", "temperature": 0.0},
-        # {"api": "gemini", "model": "gemini-2.0-flash", "temperature": 0.0},
+        {"api": "gemini", "model": "gemini-2.0-flash", "temperature": 0.0},
         # {"api": "gemini", "model": "gemini-1.5-flash", "temperature": 0.0},
         # # {"api": "gemini", "model": "gemini-1.5-pro", "temperature": 0.0},
         # {"api": "gemini", "model": "gemini-2.0-flash-thinking-exp", "temperature": 0.0},
-        {"api": "mistral", "model": "mistral-large-latest", "temperature": 0.0},
+        # {"api": "mistral", "model": "mistral-large-latest", "temperature": 0.0},
     ]
     
     framework = LLMReasoningFramework(models)
-    
-    # framework.set_api_keys()
-    
-    # exit()
-    # Example usages:
-    # 1. Direct question
-    # framework.run("What is the square root of 144?")
-    
-    # # 2. Multiple questions
-    # framework.run([
-    #     "What is 15 × 17?",
-    #     "Explain quantum entanglement"
-    # ])
-    
-    # 3. File input
-    # framework.run("../data/new_modified_math_problems_with_question_id.json")  # or .csv or .txt
+
     os.makedirs("results", exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    framework.run("../data/perplexmath-dataset.json", folder_name=f"run_{timestamp}_final_testing_mistral")
-    # 4. Structured input
-    # framework.run([
-    #     {"id": "math_1", "text": "What is 15 × 17?"},
-    #     {"id": "physics_1", "text": "Explain quantum entanglement"}
-    # ])
+    framework.run("../data/perplexmath-dataset.json", folder_name=f"run_{timestamp}_final_testing_gemini")
     
