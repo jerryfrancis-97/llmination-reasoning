@@ -38,7 +38,7 @@ CONDA
    ```
 
 To run the main scripts, use the following commands:
-Use the follwing,
+Use the following,
 
 a. `python3 data/fixing_problems.py` : TO get perplexmath dataset
 b. `python3 experiments/reasoning_evaluation.py` : TO get experiments results
