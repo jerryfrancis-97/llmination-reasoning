@@ -1,4 +1,4 @@
-# llmination-reasoning
+# PerplexMATH Dataset: Steering LLMs Towards Mathematical Reasoning
 Repo for LLM reasoning work
 
 
@@ -40,9 +40,9 @@ CONDA
 To run the main scripts, use the following commands:
 Use the following,
 
-a. `python3 data/fixing_problems.py` : TO get perplexmath dataset
-b. `python3 experiments/reasoning_evaluation.py` : TO get experiments results
-c. Use model_behavior_analysis.ipynb to generate analysis for tables
+- Run `python3 data/fixing_problems.py` to generate the PerplexMATH dataset.
+- Run `python3 experiments/reasoning_evaluation.py` to obtain experiment results.
+- Use `notebooks/model_behavior_analysis.ipynb` to generate analysis tables.
 
 ---
 
