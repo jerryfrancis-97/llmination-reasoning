@@ -1,4 +1,4 @@
-# llmination-reasoning
+# PerplexMATH Dataset: Steering LLMs Towards Mathematical Reasoning
 Repo for LLM reasoning work
 
 
