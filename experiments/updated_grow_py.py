@@ -16,6 +16,8 @@ import traceback
 import google.generativeai as genai
 from tqdm import tqdm
 from groq import Groq  # Add Groq client import
+from mistralai import Mistral  # Updated Mistral import
+# from mistralai.models.chat import ChatMessage # Add Mistral chat message import
 
 # Load environment variables
 load_dotenv("../.env")
@@ -23,7 +25,6 @@ load_dotenv("../.env")
 # Constants
 BASE_META_PROMPT = "\n\nAnswer the question above to the best of your ability."
 FORMAT_PROMPT = "\n\n Output your final answer in the format {'FINAL_ANSWER': <final_answer>, 'LABEL': <label>, 'CONFIDENCE': <confidence>} in the last line separately."
-# CODE_UTILITY_PROMPT = "\n\n You can use Python code using libraries like numpy, scipy, pandas, sympy, etc. to solve the question above, if it helps you to solve more accurately."
 REASONING_META_PROMPT = "\n\nFor the answer above, classify your reasoning as one of [Recall, Reasoning, Hallucination, Uncertain]. State the label alone."
 CONFIDENCE_META_PROMPT = "\n\nOn a scale of 0-100%, how confident are you in your answer? State only the percentage."
 CHAIN_OF_THOUGHT_PROMPT = "\n\nBefore answering, walk through your reasoning step by step."
@@ -31,12 +32,16 @@ CHAIN_OF_THOUGHT_PROMPT = "\n\nBefore answering, walk through your reasoning ste
 # Available models
 GROQ_MODELS = [
     "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
+    "llama-3.1-8b-instant", 
     "llama3-70b-8192", #llama3-70b-instruct HF
     "llama3-8b-8192",
     "gemma2-9b-it",
     "qwen-qwq-32b",
     "deepseek-r1-distill-llama-70b"
+]
+
+MISTRAL_MODELS = [
+    "mistral-large-latest"
 ]
 
 # Test questions to verify reasoning vs recall
@@ -79,6 +84,7 @@ class LLMReasoningFramework:
         # API keys - will be set during runtime
         self.groq_api_key = None
         self.gemini_api_key = None
+        self.mistral_api_key = None
         
     def set_api_keys(self):
         """Get API keys from environment or prompt the user"""
@@ -86,6 +92,7 @@ class LLMReasoningFramework:
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         print("self.groq_api_key", self.groq_api_key, not self.groq_api_key)
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        self.mistral_api_key = os.getenv("MISTRAL_API_KEY")
         
         # Validate Groq API key if needed
         if any(model["api"] == "groq" for model in self.models):
@@ -105,6 +112,19 @@ class LLMReasoningFramework:
             if not self.gemini_api_key:
                 print("\nGemini API key not found in environment variables.")
                 self.gemini_api_key = getpass.getpass("Enter your Gemini API key: ")
+            
+        # Handle Mistral key similarly
+        if any(model["api"] == "mistral" for model in self.models):
+            if not self.mistral_api_key:
+                print("\nMistral API key not found in environment variables.")
+                self.mistral_api_key = getpass.getpass("Enter your Mistral API key: ")
+            # Validate Mistral API key format
+            if not self.mistral_api_key.startswith(""):  # Add validation if needed
+                print("\nWarning: Mistral API key appears invalid.")
+                retry = input("Would you like to enter the key again? (y/n): ")
+                if retry.lower() == 'y':
+                    self.mistral_api_key = getpass.getpass("Enter your Mistral API key: ")
+            print("Mistral API key validated")
             
         # Configure Gemini if key is available
         if self.gemini_api_key:
@@ -186,6 +206,63 @@ class LLMReasoningFramework:
             
         return prompts
     
+    def query_mistral(self, prompt: str, model: str, temperature: float = 0.0) -> Dict[str, Any]:
+        """
+        Query the Mistral API using official client.
+        
+        Args:
+            prompt: The prompt text to send
+            model: Name of the Mistral model to use
+            temperature: Temperature parameter for generation (0.0 to 1.0)
+            
+        Returns:
+            Dict containing response text and timing information
+        """
+        if not self.mistral_api_key:
+            return {
+                "text": "Error: Mistral API key not provided",
+                "response_time": 0
+            }
+        
+        if model not in MISTRAL_MODELS:
+            return {
+                "text": f"Error: Invalid model name. Available models: {', '.join(MISTRAL_MODELS)}",
+                "response_time": 0
+            }
+        
+        start_time = time.time()
+        
+        for attempt in range(self.max_retries):
+            try:
+                # Initialize Mistral client with new syntax
+                client = Mistral(api_key=self.mistral_api_key)
+                
+                # Make API call with new syntax
+                chat_response = client.chat.complete(
+                    model=model,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }],
+                    temperature=min(max(temperature, 0.0), 1.0)
+                )
+                
+                return {
+                    "text": chat_response.choices[0].message.content,
+                    "response_time": time.time() - start_time
+                }
+                
+            except Exception as e:
+                print(f"Error querying Mistral (attempt {attempt+1}/{self.max_retries}): {e}")
+                if attempt < self.max_retries - 1:
+                    print(f"Retrying in {self.retry_delay} seconds...")
+                    time.sleep(self.retry_delay)
+                else:
+                    return {
+                        "text": f"Error: {str(e)}",
+                        "response_time": time.time() - start_time
+                    }
+                
     def query_groq(self, prompt: str, model: str, temperature: float = 0.0) -> Dict[str, Any]:
         """Query the Groq API using official client."""
         if not self.groq_api_key:
@@ -352,7 +429,7 @@ class LLMReasoningFramework:
         
         Args:
             prompt: The prompt to send to the model
-            api: API type ('groq' or 'gemini')
+            api: API type ('groq', 'gemini', or 'mistral')
             model: Model name
             temperature: Temperature setting
             
@@ -369,6 +446,8 @@ class LLMReasoningFramework:
             return self.query_groq(full_prompt, model, temperature)
         elif api.lower() == "gemini":
             return self.query_gemini(full_prompt, model, temperature)
+        elif api.lower() == "mistral":
+            return self.query_mistral(full_prompt, model, temperature)
         else:
             raise ValueError(f"Unsupported API: {api}")
     
@@ -1143,13 +1222,13 @@ if __name__ == "__main__":
     # Example usage
     models = [
         # {"api": "groq", "model": "llama-3.3-70b-versatile", "temperature": 0.0},
-        {"api": "groq", "model": "llama3-70b-8192", "temperature": 0.0},
+        # {"api": "groq", "model": "llama3-70b-8192", "temperature": 0.0},
         # {"api": "groq", "model": "deepseek-r1-distill-llama-70b", "temperature": 0.0},
         # {"api": "gemini", "model": "gemini-2.0-flash", "temperature": 0.0},
         # {"api": "gemini", "model": "gemini-1.5-flash", "temperature": 0.0},
         # # {"api": "gemini", "model": "gemini-1.5-pro", "temperature": 0.0},
         # {"api": "gemini", "model": "gemini-2.0-flash-thinking-exp", "temperature": 0.0},
-        # {"api": "mistral", "model": "mistral-large-latest", "temperature": 0.0},
+        {"api": "mistral", "model": "mistral-large-latest", "temperature": 0.0},
     ]
     
     framework = LLMReasoningFramework(models)
@@ -1171,7 +1250,7 @@ if __name__ == "__main__":
     # framework.run("../data/new_modified_math_problems_with_question_id.json")  # or .csv or .txt
     os.makedirs("results", exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    framework.run("../data/new_modified_math_problems_with_question_id.json", folder_name=f"run_{timestamp}_final_testing")
+    framework.run("../data/new_modified_math_problems_with_question_id.json", folder_name=f"run_{timestamp}_final_testing_mistral")
     # 4. Structured input
     # framework.run([
     #     {"id": "math_1", "text": "What is 15 × 17?"},
