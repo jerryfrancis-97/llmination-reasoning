@@ -10,7 +10,7 @@ from tqdm import tqdm
 JSONL_FILE_PATH = "math_problems.jsonl"  # Update with your actual JSONL file path
 CONCEPTS = ["Number Theory", "Intermediate Algebra", "Algebra", "Precalculus", "Prealgebra", "Geometry", "Counting & Probability"]  # Target concept
 DIFFICULTY_LEVEL = 5       # Target difficulty level
-OUTPUT_FILE = "new_modified_math_problems_with_question_id.json"
+OUTPUT_FILE = "perplexmath-dataset.json"
 
 # Prompt template for Gemini
 PROMPT_TEMPLATE = """

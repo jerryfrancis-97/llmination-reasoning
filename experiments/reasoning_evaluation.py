@@ -1250,7 +1250,7 @@ if __name__ == "__main__":
     # framework.run("../data/new_modified_math_problems_with_question_id.json")  # or .csv or .txt
     os.makedirs("results", exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    framework.run("../data/new_modified_math_problems_with_question_id.json", folder_name=f"run_{timestamp}_final_testing_mistral")
+    framework.run("../data/perplexmath-dataset.json", folder_name=f"run_{timestamp}_final_testing_mistral")
     # 4. Structured input
     # framework.run([
     #     {"id": "math_1", "text": "What is 15 × 17?"},

@@ -13,10 +13,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configuration
-INPUT_FILE = "new_modified_math_problems.json"
-OUTPUT_FILE = "answers_data.json"
-
 # Rate limiting configuration
 REQUESTS_PER_MINUTE = 15
 request_times = []
@@ -234,8 +230,8 @@ def update_output_file(problem, output_file):
 def main():
     
     API_KEY = os.getenv("GEMINI_API_KEY")
-    INPUT_FILE = "new_modified_math_problems_with_question_id.json"
-    OUTPUT_FILE = "modified_math_problems_with_answers.json"
+    INPUT_FILE = "perplexmath-dataset.json"
+    OUTPUT_FILE = "perplexmath-generated-answers.json" #using gemini-2.5-flash-preview-05-20
 
     # Delete output file if it exists
     try:
