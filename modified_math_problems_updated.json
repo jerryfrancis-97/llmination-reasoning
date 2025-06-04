@@ -1,0 +1,122 @@
+[
+  {
+    "problem_type": "large_numbers",
+    "modified_problem": "The proper divisors of $1.2 \\times 10^{12}$ are numerous. A proper divisor of an integer $N$ is a positive divisor of $N$ that is less than $N$. What is the sum of the proper divisors of the sum of the proper divisors of $2.84 \\times 10^{15}$?",
+    "explanation": "Replaced 12 and 284 with much larger numbers represented in scientific notation.",
+    "original_problem": "The proper divisors of 12 are 1, 2, 3, 4 and 6. A proper divisor of an integer $N$ is a positive divisor of $N$ that is less than $N$. What is the sum of the proper divisors of the sum of the proper divisors of 284?",
+    "original_answer": "284",
+    "correct_answer": "284",
+    "reasoning": "Despite using large numbers in scientific notation, the mathematical structure of the problem remains the same as the original. The sum of proper divisors follows the same rules regardless of the size of the numbers, and the calculation would still yield the same result as the original problem since we're replacing numbers with equivalent numerical values in a different format.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 737
+  },
+  {
+    "problem_type": "impossible_context",
+    "modified_problem": "The proper divisors of 12, in the mystical realm of Xylos, are 1, 2, 3, 4, and 6, but only when observed by a being with exactly seven eyes. A proper divisor of an integer $N$ is a positive divisor of $N$ that is less than $N$, at least in our reality. What is the sum of the proper divisors of the sum of the proper divisors of 284, considering that the Xylos's mathematical system might differ from ours?",
+    "explanation": "Introduced an impossible context that is mathematically irrelevant but creates an inconsistent scenario.",
+    "original_problem": "The proper divisors of 12 are 1, 2, 3, 4 and 6. A proper divisor of an integer $N$ is a positive divisor of $N$ that is less than $N$. What is the sum of the proper divisors of the sum of the proper divisors of 284?",
+    "original_answer": "no solution",
+    "correct_answer": "no solution",
+    "reasoning": "This problem has no solution because it creates an inconsistent mathematical framework. The problem introduces the 'mystical realm of Xylos' where mathematical rules only apply under specific conditions (observation by a being with seven eyes) and suggests that mathematical systems might differ between realms. Mathematics requires consistent rules and definitions to reach valid conclusions. When the problem states that 'Xylos's mathematical system might differ from ours,' it implies that the fundamental properties of divisors and arithmetic operations could be altered in unpredictable ways, making it impossible to determine a definitive answer within our standard mathematical framework.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 737
+  },
+  {
+    "problem_type": "ambiguous",
+    "modified_problem": "What is the sum of the divisors of the sum of the divisors of 284?",
+    "explanation": "Removed the specification that the divisors must be proper divisors.",
+    "original_problem": "The proper divisors of 12 are 1, 2, 3, 4 and 6. A proper divisor of an integer $N$ is a positive divisor of $N$ that is less than $N$. What is the sum of the proper divisors of the sum of the proper divisors of 284?",
+    "original_answer": "284",
+    "correct_answer": "284",
+    "reasoning": "Although the problem is ambiguous by removing the specification of 'proper' divisors, we can still solve it using the original interpretation of proper divisors. The difference between divisors and proper divisors is that proper divisors exclude the number itself. This change creates ambiguity but doesn't fundamentally alter the mathematical operation being requested.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 737
+  },
+  {
+    "problem_type": "paradox",
+    "modified_problem": "Let $S(N)$ be the sum of the proper divisors of $N$. Consider a number $N$ such that $S(N) = N$. Find $S(S(284))$. Then, consider the case where this sum is applied infinitely many times. Does this process converge to a definite value?",
+    "explanation": "Introduced a concept of self-referential sum of divisors, leading to the question of convergence which may not be necessarily solvable or convergent.",
+    "original_problem": "The proper divisors of 12 are 1, 2, 3, 4 and 6. A proper divisor of an integer $N$ is a positive divisor of $N$ that is less than $N$. What is the sum of the proper divisors of the sum of the proper divisors of 284?",
+    "original_answer": "no solution",
+    "correct_answer": "no solution",
+    "reasoning": "This problem has no solution because it introduces a paradoxical condition and shifts the focus from a single calculation to an infinite sequence analysis. The original problem asked for a specific calculation (S(S(284))), but this version adds conditions about perfect numbers (where S(N) = N) and then asks about the convergence of an infinite sequence. The first part could potentially be calculated, but the convergence question creates a problem without a clear solution because: 1) We don't know if this sequence converges for the given starting value, 2) The behavior of iterated aliquot sums is an open problem in number theory for many starting values, and 3) The connection to perfect numbers introduces a constraint that makes the problem self-referential in a way that wasn't in the original problem.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 737
+  },
+  {
+    "problem_type": "irrelevant_info",
+    "modified_problem": "The year is 2743. The Galactic Federation is studying the properties of integers. The proper divisors of 12 are 1, 2, 3, 4, and 6. A proper divisor of an integer $N$ is a positive divisor of $N$ that is less than $N$. What is the sum of the proper divisors of the sum of the proper divisors of 284? The Federation's latest starship, the 'Hyperion', is capable of faster-than-light travel.",
+    "explanation": "Added extraneous details about a futuristic galactic federation and their spaceship, which is irrelevant to the problem.",
+    "original_problem": "The proper divisors of 12 are 1, 2, 3, 4 and 6. A proper divisor of an integer $N$ is a positive divisor of $N$ that is less than $N$. What is the sum of the proper divisors of the sum of the proper divisors of 284?",
+    "original_answer": "284",
+    "correct_answer": "284",
+    "reasoning": "Despite the addition of irrelevant information about a futuristic setting and faster-than-light travel, the mathematical content of the problem remains identical to the original. The narrative framing has no impact on the mathematical operations required to find the sum of the proper divisors.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 737
+  },
+  {
+    "problem_type": "large_numbers",
+    "modified_problem": "You have seven bags of gold coins. Each bag contains $7 \\times 10^9$ gold coins. One day, you find a bag containing $5.3 \\times 10^7$ coins. You decide to redistribute the coins so that all eight bags have the same number of coins. You successfully manage to redistribute all the coins, and you also note that you have more than $2 \\times 10^{10}$ coins. What is the smallest number of coins you could have had before finding the additional bag?",
+    "explanation": "Values changed to billions and scientific notation.",
+    "original_problem": "You have seven bags of gold coins. Each bag has the same number of gold coins. One day, you find a bag of 53 coins. You decide to redistribute the number of coins you have so that all eight bags you hold have the same number of coins. You successfully manage to redistribute all the coins, and you also note that you have more than 200 coins. What is the smallest number of coins you could have had before finding the bag of 53 coins?",
+    "original_answer": "203",
+    "correct_answer": "203",
+    "reasoning": "Although the numbers have been scaled to very large values using scientific notation, the mathematical relationship between the quantities remains the same. The problem structure is identical - we need to find the minimum initial quantity that satisfies the redistribution condition. The scaling factor applied to all values maintains the mathematical proportions of the original problem.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 1055
+  },
+  {
+    "problem_type": "impossible_context",
+    "modified_problem": "You have seven bags of gold coins, each with a negative number of coins. One day, you find a bag of 53 coins. You decide to redistribute the coins so that all eight bags have the same number of coins. You successfully manage to redistribute all the coins, resulting in a positive total number of coins greater than 200. What is the smallest number of coins you could have had before finding the bag of 53 coins?",
+    "explanation": "The initial number of coins is made negative, creating an impossible scenario before redistribution.",
+    "original_problem": "You have seven bags of gold coins. Each bag has the same number of gold coins. One day, you find a bag of 53 coins. You decide to redistribute the number of coins you have so that all eight bags you hold have the same number of coins. You successfully manage to redistribute all the coins, and you also note that you have more than 200 coins. What is the smallest number of coins you could have had before finding the bag of 53 coins?",
+    "original_answer": "no solution",
+    "correct_answer": "no solution",
+    "reasoning": "This problem has no solution because it creates a physically impossible scenario involving negative quantities of coins. The concept of a 'negative number of coins' contradicts the physical reality of coins as countable objects. While negative numbers are valid mathematical constructs, they cannot represent physical quantities of discrete objects like coins. Additionally, the problem creates a logical contradiction: it states that redistributing a negative initial quantity plus 53 new coins must result in a positive total exceeding 200 coins across 8 bags. This is mathematically impossible - if the initial quantity is sufficiently negative, no amount of redistribution with the added 53 coins could result in all bags having equal positive quantities totaling over 200.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 1055
+  },
+  {
+    "problem_type": "ambiguous",
+    "modified_problem": "You have seven bags of coins. One day, you find a bag of 53 coins. You redistribute the coins among eight bags. You have more than 200 coins. What is the smallest number of coins you could have had initially?",
+    "explanation": "Removed the specification that each bag initially contained the same number of coins.",
+    "original_problem": "You have seven bags of gold coins. Each bag has the same number of gold coins. One day, you find a bag of 53 coins. You decide to redistribute the number of coins you have so that all eight bags you hold have the same number of coins. You successfully manage to redistribute all the coins, and you also note that you have more than 200 coins. What is the smallest number of coins you could have had before finding the bag of 53 coins?",
+    "original_answer": "203",
+    "correct_answer": "203",
+    "reasoning": "While the problem is ambiguous by removing the condition that each bag initially contains the same number of coins, we can still solve it by assuming the most reasonable interpretation. The ambiguity creates multiple possible scenarios for the initial distribution of coins, but the core mathematical relationship between the initial and final states remains solvable.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 1055
+  },
+  {
+    "problem_type": "paradox",
+    "modified_problem": "You have seven bags of gold coins. Each bag has the same number of coins, and this number is also the solution to this problem. One day, you find a bag of 53 coins. You decide to redistribute the coins so that all eight bags have the same number of coins. You successfully manage to redistribute all the coins, and you also note that you have more than 200 coins. What is the smallest number of coins you could have had before finding the bag of 53 coins?",
+    "explanation": "The solution is embedded as a condition within the problem, creating a self-referential paradox.",
+    "original_problem": "You have seven bags of gold coins. Each bag has the same number of gold coins. One day, you find a bag of 53 coins. You decide to redistribute the number of coins you have so that all eight bags you hold have the same number of coins. You successfully manage to redistribute all the coins, and you also note that you have more than 200 coins. What is the smallest number of coins you could have had before finding the bag of 53 coins?",
+    "original_answer": "no solution",
+    "correct_answer": "no solution",
+    "reasoning": "This problem has no solution because it contains a self-referential paradox. The problem states that 'each bag has the same number of coins, and this number is also the solution to this problem.' This creates a circular definition where the solution depends on itself: the number of coins per bag can only be determined by solving the problem, but the problem statement defines this number as already being the solution. Such circular logic creates an impossible situation where no answer can satisfy the problem constraints. The value we're solving for is simultaneously an input to and output from the problem, creating a paradoxical condition that cannot be resolved through standard mathematical methods.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 1055
+  },
+  {
+    "problem_type": "irrelevant_info",
+    "modified_problem": "You have seven bags of gold coins, each weighing exactly 1.5 kg. These bags are made of solid platinum, incredibly valuable in their own right. Each bag has the same number of gold coins. One day, you find a bag of 53 coins. A renowned numismatist later declares the coins to be exceptionally rare and potentially worth millions. You decide to redistribute the number of coins you have so that all eight bags you hold have the same number of coins. You successfully manage to redistribute all the coins, and you also note that you have more than 200 coins. What is the smallest number of coins you could have had before finding the bag of 53 coins?",
+    "explanation": "Added irrelevant information about the weight and value of the bags and coins.",
+    "original_problem": "You have seven bags of gold coins. Each bag has the same number of gold coins. One day, you find a bag of 53 coins. You decide to redistribute the number of coins you have so that all eight bags you hold have the same number of coins. You successfully manage to redistribute all the coins, and you also note that you have more than 200 coins. What is the smallest number of coins you could have had before finding the bag of 53 coins?",
+    "original_answer": "203",
+    "correct_answer": "203",
+    "reasoning": "The problem contains irrelevant information about the weights, materials, and values of the coins and bags, but these details don't affect the mathematical structure of the problem. The core elements - seven bags with equal numbers of coins, finding 53 more coins, redistributing into eight bags, and the total exceeding 200 coins - remain unchanged from the original problem.",
+    "subject": "Number Theory",
+    "level": 5,
+    "unique_id": 1055
+  }
+]
