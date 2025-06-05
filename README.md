@@ -1,6 +1,9 @@
 # PerplexMATH Dataset: Steering LLMs Towards Mathematical Reasoning
 Repo for LLM reasoning work
 
+## Repo Structure
+- data/ : Contains Python and JSON files to generate dataset
+- experiments/ : Contains evaluation scripts for experiments
 
 ## Overview
 
