@@ -938,5 +938,5 @@ if __name__ == "__main__":
 
     os.makedirs("results", exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    framework.run("../data/perplexmath-dataset.json", folder_name=f"run_{timestamp}_final_testing_gemini")
+    framework.run("C:/llmination-reasoning/data/Kamesh_assigned.json", folder_name=f"run_{timestamp}_final_testing_gemini")
     
