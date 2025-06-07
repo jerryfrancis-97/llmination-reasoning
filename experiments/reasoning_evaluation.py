@@ -386,18 +386,13 @@ class LLMReasoningFramework:
         Returns:
             API response
         """
-        # Create the chain-of-thought prompt first
-        cot_prompt = prompt + CHAIN_OF_THOUGHT_PROMPT + BASE_META_PROMPT
-        
-        # Then add the meta-prompts for reasoning type and confidence
-        full_prompt = cot_prompt + REASONING_META_PROMPT + CONFIDENCE_META_PROMPT + FORMAT_PROMPT
         
         if api.lower() == "groq":
-            return self.query_groq(full_prompt, model, temperature)
+            return self.query_groq(prompt, model, temperature)
         elif api.lower() == "gemini":
-            return self.query_gemini(full_prompt, model, temperature)
+            return self.query_gemini(prompt, model, temperature)
         elif api.lower() == "mistral":
-            return self.query_mistral(full_prompt, model, temperature)
+            return self.query_mistral(prompt, model, temperature)
         else:
             raise ValueError(f"Unsupported API: {api}")
     
@@ -847,8 +842,13 @@ class LLMReasoningFramework:
                         try:
                             # Query model
                             while True:
+                                # Create the chain-of-thought prompt first
+                                cot_prompt = prompt_text + CHAIN_OF_THOUGHT_PROMPT + BASE_META_PROMPT
+                                # Then add the meta-prompts for reasoning type and confidence
+                                full_prompt = cot_prompt + REASONING_META_PROMPT + CONFIDENCE_META_PROMPT + FORMAT_PROMPT
+
                                 response = self.query_model(
-                                    prompt_text,
+                                    full_prompt,
                                     model_config["api"],
                                     model_config["model"],
                                     model_config.get("temperature", 0.0)
