@@ -28,6 +28,32 @@ REASONING_META_PROMPT = "\n\nFor the answer above, classify your reasoning as on
 CONFIDENCE_META_PROMPT = "\n\nOn a scale of 0-100%, how confident are you in your answer? State only the percentage."
 CHAIN_OF_THOUGHT_PROMPT = "\n\nBefore answering, walk through your reasoning step by step."
 
+ANNOTATION_PROMPT1 = """\n\nThe reasoning chain to analyze: \n\n"""
+ANNOTATION_PROMPT2 = """\n\n
+Please split the following reasoning chain of an LLM into annotated parts using labels and the following format. A sentence should be split into multiple parts if it incorporates multiple behaviours indicated by the labels.
+
+Available labels:
+["initializing"] -> The model is rephrasing the given task and states initial thoughts.
+["deduction"] -> The model is performing a deduction step based on its current approach and assumptions.
+["adding-knowledge"] -> The model is enriching the current approach with recalled facts.
+["example-testing"] -> The model generates examples to test its current approach.
+["uncertainty-estimation"] -> The model is stating its own uncertainty.
+["backtracking"] -> The model decides to change its approach.
+["checking"] -> The model is checking the correctness of its current approach. Provide reason why it wants to check the current approach.
+["separate"] -> If there is a tail that has no annotation using the above labels.
+
+Also include a keyword in the following format <keyword> for each label before the ["end-section"] for the following cases,
+<Memorization> -> Memory/ Fact recall, the model is explicitly recalling or restating known facts from memory, internal knownledge base.
+<Reasoning> -> Actual Reasoning, the model is trying to solving the problem at this step using first principles and NOT referring/ recalling anything from its knowledge base. 
+<Computation> -> The model is performing a computation or a calculation step.
+<Exploration> -> The model is exploring the problem space, trying to find a new approach or finding a solution.
+<Uncertainty> -> The model is stating its own uncertainty to an approach or about the answer/solution.
+
+Answer in the following format:
+["label"]... <keyword> ["end-section"]
+Only use the labels and keywords outlined above. 
+"""
+
 # Available models
 GROQ_MODELS = [
     "llama-3.3-70b-versatile",
@@ -44,17 +70,11 @@ MISTRAL_MODELS = [
 ]
 
 
-class LLMReasoningFramework:
-    def __init__(self, models: List[Dict[str, Any]] = None):
-        """
-        Initialize the framework with specified models.
-        
-        Args:
-            models: List of model configurations
-        """
-        self.models = models or []
-        # Updated results DataFrame columns
-        self.results_df = pd.DataFrame()
+class ModelQueryHandler:
+    """
+    Handles model querying functionality that can be shared between different classes.
+    """
+    def __init__(self):
         self.retry_delay = 5  # seconds to wait between retries
         self.max_retries = 3  # maximum number of retries per API call
         
@@ -62,47 +82,13 @@ class LLMReasoningFramework:
         self.groq_api_key = None
         self.gemini_api_key = None
         self.mistral_api_key = None
+
+    def set_api_keys(self, groq_key: Optional[str] = None, gemini_key: Optional[str] = None, mistral_key: Optional[str] = None):
+        """Set API keys for the handler"""
+        self.groq_api_key = groq_key
+        self.gemini_api_key = gemini_key
+        self.mistral_api_key = mistral_key
         
-    def set_api_keys(self):
-        """Get API keys from environment or prompt the user"""
-        # Try to get from environment first
-        self.groq_api_key = os.getenv("GROQ_API_KEY")
-        print("self.groq_api_key", self.groq_api_key, not self.groq_api_key)
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        self.mistral_api_key = os.getenv("MISTRAL_API_KEY")
-        
-        # Validate Groq API key if needed
-        if any(model["api"] == "groq" for model in self.models):
-            if not self.groq_api_key:
-                print("\nGroq API key not found in environment variables.")
-                self.groq_api_key = getpass.getpass("Enter your Groq API key: ")
-            # Validate Groq API key format
-            if not self.groq_api_key.startswith("gsk_"):
-                print("\nWarning: Groq API key appears invalid. It should start with 'gsk_'")
-                retry = input("Would you like to enter the key again? (y/n): ")
-                if retry.lower() == 'y':
-                    self.groq_api_key = getpass.getpass("Enter your Groq API key: ")
-            print("Groq API key validated")
-        
-        # Handle Gemini key similarly
-        if any(model["api"] == "gemini" for model in self.models):
-            if not self.gemini_api_key:
-                print("\nGemini API key not found in environment variables.")
-                self.gemini_api_key = getpass.getpass("Enter your Gemini API key: ")
-            
-        # Handle Mistral key similarly
-        if any(model["api"] == "mistral" for model in self.models):
-            if not self.mistral_api_key:
-                print("\nMistral API key not found in environment variables.")
-                self.mistral_api_key = getpass.getpass("Enter your Mistral API key: ")
-            # Validate Mistral API key format
-            if not self.mistral_api_key.startswith(""):  # Add validation if needed
-                print("\nWarning: Mistral API key appears invalid.")
-                retry = input("Would you like to enter the key again? (y/n): ")
-                if retry.lower() == 'y':
-                    self.mistral_api_key = getpass.getpass("Enter your Mistral API key: ")
-            print("Mistral API key validated")
-            
         # Configure Gemini if key is available
         if self.gemini_api_key:
             try:
@@ -110,64 +96,9 @@ class LLMReasoningFramework:
                 print("Gemini API configured successfully")
             except Exception as e:
                 print(f"Error configuring Gemini API: {e}")
-        
-    def load_prompts(self, input_data: Union[str, List[str], List[Dict[str, str]]]) -> List[Dict[str, Any]]:
-        """
-        Load prompts from text, CSV, JSON file, or direct input.
-        
-        Args:
-            input_data: Can be:
-                - File path (str)
-                - Direct question (str)
-                - List of questions (List[str])
-                - List of prompt dictionaries (List[Dict[str, str]])
-                
-        Returns:
-            List of dictionaries with prompt IDs and text
-        """
-        prompts = []
-        
-        try:
 
-            # Check if it's a file path
-            if os.path.exists(input_data):
-                # Handle JSON file
-                if input_data.endswith('.json'):
-                    with open(input_data, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                        # Handle list of prompts
-                        if isinstance(data, list):
-                            for i, item in enumerate(data):
-                                if isinstance(item, dict) and "modified_problem" in item:
-                                    prompts.append({
-                                        "question_id": item["question_id"],
-                                        "modified_problem": item["modified_problem"],
-                                        "problem_type": item["problem_type"],
-                                        "subject": item["subject"],
-                                        "level": item["level"],
-                                    })
-                                   
-    
-        except Exception as e:
-            print(f"Error loading prompts: {e}")
-            traceback.print_exc()
-            return []
-            
-            
-        return prompts
-    
     def query_mistral(self, prompt: str, model: str, temperature: float = 0.0) -> Dict[str, Any]:
-        """
-        Query the Mistral API using official client.
-        
-        Args:
-            prompt: The prompt text to send
-            model: Name of the Mistral model to use
-            temperature: Temperature parameter for generation (0.0 to 1.0)
-            
-        Returns:
-            Dict containing response text and timing information
-        """
+        """Query the Mistral API using official client."""
         if not self.mistral_api_key:
             return {
                 "text": "Error: Mistral API key not provided",
@@ -184,10 +115,7 @@ class LLMReasoningFramework:
         
         for attempt in range(self.max_retries):
             try:
-                # Initialize Mistral client with new syntax
                 client = Mistral(api_key=self.mistral_api_key)
-                
-                # Make API call with new syntax
                 chat_response = client.chat.complete(
                     model=model,
                     messages=[{
@@ -212,7 +140,7 @@ class LLMReasoningFramework:
                         "text": f"Error: {str(e)}",
                         "response_time": time.time() - start_time
                     }
-                
+
     def query_groq(self, prompt: str, model: str, temperature: float = 0.0) -> Dict[str, Any]:
         """Query the Groq API using official client."""
         if not self.groq_api_key:
@@ -221,8 +149,6 @@ class LLMReasoningFramework:
                 "response_time": 0
             }
         
-        # Clean up model name
-        # model = model.lower().replace("-8192", "").replace("-32768", "")
         if model not in GROQ_MODELS:
             return {
                 "text": f"Error: Invalid model name. Available models: {', '.join(GROQ_MODELS)}",
@@ -233,10 +159,7 @@ class LLMReasoningFramework:
         
         for attempt in range(self.max_retries):
             try:
-                # Initialize Groq client
                 client = Groq(api_key=self.groq_api_key)
-                
-                # Make API call
                 chat_completion = client.chat.completions.create(
                     messages=[{
                         "role": "user",
@@ -261,7 +184,7 @@ class LLMReasoningFramework:
                         "text": f"Error: {str(e)}",
                         "response_time": time.time() - start_time
                     }
-    
+
     def query_gemini(self, prompt: str, model: str, temperature: float = 0.0) -> Dict[str, Any]:
         """Query the Gemini API."""
         if not self.gemini_api_key:
@@ -294,7 +217,6 @@ class LLMReasoningFramework:
     
         for attempt in range(self.max_retries):
             try:
-                # Configure the model
                 generation_config = {
                     "temperature": temperature,
                     "top_p": 1,
@@ -322,25 +244,21 @@ class LLMReasoningFramework:
                 ]
                 
                 try:
-                    # List available models first
                     models = genai.list_models()
                     available_models = [m.name for m in models]
                     
                     if model not in available_models:
                         raise ValueError(f"Model {model} not found. Available models: {available_models}")
                     
-                    # Create the model instance
                     model_instance = genai.GenerativeModel(
                         model_name=model,
                         generation_config=generation_config,
                         safety_settings=safety_settings
                     )
                     
-                    # Generate content
                     response = model_instance.generate_content(prompt)
                     end_time = time.time()
                     
-                    # Handle response format
                     response_text = ""
                     if hasattr(response, 'text'):
                         response_text = response.text
@@ -372,7 +290,7 @@ class LLMReasoningFramework:
                         "text": f"Error: {str(e)}",
                         "response_time": time.time() - start_time
                     }
-    
+
     def query_model(self, prompt: str, api: str, model: str, temperature: float = 0.0) -> Dict[str, Any]:
         """
         Query appropriate API based on api parameter.
@@ -386,7 +304,6 @@ class LLMReasoningFramework:
         Returns:
             API response
         """
-        
         if api.lower() == "groq":
             return self.query_groq(prompt, model, temperature)
         elif api.lower() == "gemini":
@@ -395,193 +312,15 @@ class LLMReasoningFramework:
             return self.query_mistral(prompt, model, temperature)
         else:
             raise ValueError(f"Unsupported API: {api}")
-    
-    def parse_response(self, response_text: str) -> Tuple[str, str, str, Optional[float]]:
-        """
-        Parse model response to extract answer, chain of thought, reasoning type, and confidence.
-        
-        Args:
-            response_text: Raw response from the model
-            
-        Returns:
-            Tuple of (answer, chain_of_thought, reasoning_type, confidence)
-        """
-        # Reasoning labels
-        reasoning_labels = ["Recall", "Reasoning", "Hallucination", "Uncertain"]
-        
-        # Default values
-        full_answer = response_text
-        chain_of_thought = ""
-        final_answer = response_text
-        reasoning_type = None
-        confidence = None
-        
-        # Extract the chain of thought part
-        # Look for common indicators of a step-by-step process
-        step_indicators = ["Step 1", "First,", "To solve this", "Let's break this down", 
-                          "I'll approach this", "Let me think", "Let's think", 
-                          "To determine", "Let's calculate"]
-        
-        # Look for a reasoning process followed by an answer
-        for indicator in step_indicators:
-            if indicator in response_text:
-                # Find where the final answer likely begins
-                answer_indicators = ["Therefore,", "So,", "In conclusion,", "Thus,", 
-                                     "The answer is", "This means", "To summarize", 
-                                     "Finally,", "In summary"]
-                
-                for ans_ind in answer_indicators:
-                    ans_parts = response_text.split(ans_ind)
-                    if len(ans_parts) > 1:
-                        chain_of_thought = ans_parts[0].strip()
-                        final_answer = ans_ind + ans_parts[1].strip()
-                        break
-                
-                if chain_of_thought:  # If we found a clean separation
-                    break
-        
-        # If no clear structure was found, use heuristic 
-        if not chain_of_thought:
-            # Try to split by paragraph
-            paragraphs = response_text.split("\n\n")
-            if len(paragraphs) > 1:
-                # Assume earlier paragraphs are reasoning and the last is the answer
-                chain_of_thought = "\n\n".join(paragraphs[:-1])
-                # final_answer = paragraphs[-1]
-            else:
-                pass
-                # No clear way to separate, leave as is
-                # final_answer = response_text
-        
-        # Parse the structured output format from the last line
-        lines = response_text.split('\n')
-        for line in reversed(lines):
-            if line.strip():  # Find last non-empty line
-                try:
-                    # Try to parse JSON-like structure from the line
-                    match = re.search(r"{'FINAL_ANSWER':\s*(.+?),\s*'LABEL':\s*(.+?),\s*'CONFIDENCE':\s*(.+?)}", line)
-                    if match:
-                        final_answer = match.group(1).strip()
-                        reasoning_type = match.group(2).strip()
-                        try:
-                            confidence = float(match.group(3).strip())
-                        except ValueError:
-                            confidence = None
-                        break
-                except:
-                    continue
-        
-        # Final cleanup
-        final_answer = final_answer.strip()
-        chain_of_thought = chain_of_thought.strip()
-        print("output", final_answer, chain_of_thought, reasoning_type, confidence)
 
-        return final_answer, chain_of_thought, reasoning_type, confidence
-    
-    def log_result(self, question_id: Any, modified_problem: str, api: str, model: str, 
-                  final_answer: str, chain_of_thought: str, reasoning_type: str, 
-                  confidence: Optional[float], response_time: float,
-                  annotations: List[str], reasoning_count_metrics: Dict[str, int], reasoning_pct_metrics: Dict[str, float],
-                  problem_type: str, subject: str, level: str,
-                  verification_check: str = "Not Verified") -> None:
-        """
-        Add a result to the DataFrame.
-        
-        Args:
-            question_id: Unique identifier for the question
-            modified_problem: The modified problem text
-            api: API used ('groq' or 'gemini')
-            model: Model name
-            answer: Model's answer
-            chain_of_thought: Step-by-step reasoning process
-            reasoning_type: Extracted reasoning type
-            confidence: Confidence score (if available)
-            response_time: Time taken for API response
-            annotations: Annotations for the reasoning chain
-            reasoning_count_metrics: Metrics for the reasoning chain
-            reasoning_pct_metrics: Percentage metrics for the reasoning chain
-            problem_type: Type of problem
-            subject: Subject of the problem
-            level: Level of the problem
-            verification_check: Result of verification checks
-        """
-        # Perform external evaluation
-        evaluation = "Pending"
-        if reasoning_type == "Reasoning" and verification_check not in ["Verified Reasoning", "Novel Reasoning Verified", "Strong Reasoning Evidence"]:
-            evaluation = "Potential False Reasoning Claim"
-        elif reasoning_type == "Recall" and verification_check in ["Verified Reasoning", "Novel Reasoning Verified"]:
-            evaluation = "Understated Reasoning Capability"
-        elif verification_check in ["Incorrect", "Misled by Context", "Distracted by Irrelevant Details"]:
-            evaluation = "Poor Reasoning"
-        else:
-            evaluation = "Consistent"
-        
-        # Create new row
-        # Convert metrics dicts to dataframes
-        count_metrics_df = pd.DataFrame([reasoning_count_metrics])
-        pct_metrics_df = pd.DataFrame([reasoning_pct_metrics])
-        
-        # Create base dataframe
-        new_row = pd.DataFrame({
-            "question_id": [question_id],
-            "modified_problem": [modified_problem],
-            "api": [api],
-            "model": [model],
-            "final_answer": [final_answer],
-            "chain_of_thought": [chain_of_thought],
-            "reasoning_type": [reasoning_type],
-            "confidence": [confidence],
-            "response_time": [response_time],
-            "problem_type": [problem_type],
-            "subject": [subject],
-            "level": [level],
-            "timestamp": [datetime.datetime.now()],
-            "annotations": [annotations],
-            # "evaluation": [evaluation],
-            # "verification_check": [verification_check]
-        })
-        
-        # Add metrics columns
-        for col in count_metrics_df.columns:
-            new_row[col] = count_metrics_df[col]
-        for col in pct_metrics_df.columns:
-            new_row[col] = pct_metrics_df[col]
-        # Add to DataFrame
-        self.results_df = pd.concat([self.results_df, new_row], ignore_index=True, sort=False)
 
-    def save_results(self, results_df: pd.DataFrame, file_name: str, format: str = "pkl") -> None:
-        """
-        Save results DataFrame to file.
-        
-        Args:
-            results_df: DataFrame containing results to save
-            file_path: Path for the output file
-            format: Output format ('pkl', 'csv', or 'json')
-        """
-        try:
-            # Create results directory if it doesn't exist
-            
-            # Update file path to be in results directory
-            file_path = f"{file_name}.{format}"
-            
-            if format.lower() == "csv":
-                # Handle potential encoding issues with CSV
-                results_df.to_csv(file_path, index=False, encoding='utf-8-sig')
-                print(f"CSV saved: {file_path}")
-            elif format.lower() == "json":
-                # Convert DataFrame to JSON
-                json_data = results_df.to_json(orient="records", indent=2)
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(json_data)
-                print(f"JSON saved: {file_path}")
-            else:
-                # Default to pickle format
-                results_df.to_pickle(file_path)
-                print(f"Pickle saved: {file_path}")
-                
-        except Exception as e:
-            print(f"Error saving results: {e}")
-            traceback.print_exc()
+class ReasoningEvaluationKeyword:
+    """
+    This class is used to evaluate the reasoning of a model using specific keywords.
+    """
+
+    def __init__(self):
+        pass
 
     def annotate_reasoning_chain(self, text: str) -> tuple[list[str], str, dict[str, int]]:
         """
@@ -791,19 +530,487 @@ class LLMReasoningFramework:
         return indicator_metrics_dict
 
 
-    def analyze_reasoning(self, response):
+class ReasoningSelfEvaluation:
+    """
+    This class is used to evaluate the reasoning of a model using self-reasoning.
+    """
+
+    def __init__(self, model_query_handler: Optional[ModelQueryHandler] = None):
+        if model_query_handler:
+            self.model_query_handler = model_query_handler
+            print("Using existing model query handler")
+        else:
+            self.model_query_handler = ModelQueryHandler()
+            print("Creating new model query handler")
+
+    def parse_reasoning_indicators(self, annotations):
+        """
+        Analyze reasoning for a given model response using the same eval model.
+        Returns dictionaries counting annotation-keyword pairs and keywords.
+        """
+        if not annotations:
+            return {}, {}
+
+        # Initialize counters
+        annotation_keyword_counts = {}  # For "annotation--keyword" pairs
+        keyword_counts = {}  # For just keywords
+
+        # Regex patterns to extract annotations and keywords
+        annotation_pattern = r'\["([^"]+)"\]'
+        keyword_pattern = r'<([^>]+)>'
+        section_end = r'\["end-section"\]'
+
+        # Split response into sections (each section ends with ["end-section"])
+        sections = re.split(section_end, annotations)
+
+        for section in sections:
+            if not section.strip():
+                continue
+
+            # Find all annotations and keywords in this section
+            annotations = re.findall(annotation_pattern, section)
+            keywords = re.findall(keyword_pattern, section)
+
+            # For each annotation-keyword pair in the section
+            for annotation in annotations:
+                for keyword in keywords:
+                    pair_key = f"{annotation}--{keyword}"
+                    annotation_keyword_counts[pair_key] = annotation_keyword_counts.get(pair_key, 0) + 1
+
+            # Count keywords separately
+            for keyword in keywords:
+                keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
+            keyword_counts['total_annotations'] = len(sections)
+
+        return annotation_keyword_counts, keyword_counts
+
+    def annotate_reasoning_chain_with_prompt(self, response, model_config):
+        """
+        Annotate reasoning chain with a prompt.
+        """
+        if response:
+            annotate_prompt = ANNOTATION_PROMPT1 + response + ANNOTATION_PROMPT2
+            annotate_response = self.model_query_handler.query_model(annotate_prompt,
+                                                model_config["api"],
+                                                model_config["model"],
+                                                model_config.get("temperature", 0.0))
+            return annotate_response["text"]
+        else:
+            return ""
+    def compute_annotation_metrics(self, annotation_keyword_counts, keyword_counts):
+        """
+        Compute metrics from annotation and keyword counts similar to compute_reasoning_metrics.
+        
+        Args:
+            annotation_keyword_counts: Dict of annotation-keyword pair counts
+            keyword_counts: Dict of keyword counts
+            
+        Returns:
+            Dict containing computed metrics and interpretations
+        """
+        # Initialize metrics dictionary
+        metrics = {
+            "memorization_pct": 0,
+            "reasoning_pct": 0,
+            "exploration_pct": 0, 
+            "uncertainty_pct": 0,
+            "computation_pct": 0,
+            "primary_approach": "Balanced",
+            "secondary_approach": "",
+            "interpretation": "",
+            "likelihood_assessment": ""
+        }
+        # Add individual annotation-keyword pair counts to metrics
+        for pair_key, count in annotation_keyword_counts.items():
+            metrics[f"pair_{pair_key}"] = count
+        for key, value in keyword_counts.items():
+            metrics[key] = value
+        # Calculate percentages if we have annotations
+        total_indicators = sum(keyword_counts.values()) - keyword_counts['total_annotations']
+        if total_indicators > 0:
+            memorization_count = keyword_counts.get('Memorization', 0)
+            reasoning_count = keyword_counts.get('Reasoning', 0)
+            exploration_count = keyword_counts.get('Exploration', 0)
+            uncertainty_count = keyword_counts.get('Uncertainty', 0)
+            computation_count = keyword_counts.get('Computation', 0)
+
+            metrics["memorization_pct"] = (memorization_count / total_indicators) * 100
+            metrics["reasoning_pct"] = (reasoning_count / total_indicators) * 100
+            metrics["exploration_pct"] = (exploration_count / total_indicators) * 100
+            metrics["uncertainty_pct"] = (uncertainty_count / total_indicators) * 100
+            metrics["computation_pct"] = (computation_count / total_indicators) * 100
+
+            # Determine primary approach
+            if metrics["memorization_pct"] > 40:
+                metrics["primary_approach"] = "Memorization"
+            elif metrics["reasoning_pct"] > 40:
+                metrics["primary_approach"] = "Reasoning"
+            elif metrics["computation_pct"] > 40:
+                metrics["primary_approach"] = "Computation"
+
+            # Determine secondary characteristics
+            if metrics["uncertainty_pct"] > 15:
+                metrics["secondary_approach"] = " with Uncertainty"
+            elif metrics["exploration_pct"] > 15:
+                metrics["secondary_approach"] = " with Exploration"
+
+            # Build interpretation
+            if metrics["memorization_pct"] > metrics["reasoning_pct"] and metrics["memorization_pct"] > metrics["exploration_pct"]:
+                metrics["interpretation"] = "The model appears to be RECALLING knowledge or formulas from its training data. This indicates the problem or a similar one may have been seen during training."
+            elif metrics["reasoning_pct"] > metrics["memorization_pct"] and metrics["reasoning_pct"] > metrics["exploration_pct"]:
+                metrics["interpretation"] = "The model is primarily using REASONING to derive the answer step by step. This indicates the model is applying general principles rather than recalling specific solutions."
+            elif metrics["exploration_pct"] > metrics["memorization_pct"] and metrics["exploration_pct"] > metrics["reasoning_pct"]:
+                metrics["interpretation"] = "The model is EXPLORING different approaches or testing hypotheses. This suggests it's applying problem-solving techniques rather than recalling solutions."
+
+            # Add uncertainty assessment
+            if metrics["uncertainty_pct"] > 15:
+                metrics["interpretation"] += " The model expresses UNCERTAINTY, suggesting it may not have seen this exact problem before and is working through unfamiliar territory."
+
+            # Add computation assessment
+            if metrics["computation_pct"] > 30:
+                metrics["interpretation"] += " The response contains significant COMPUTATION, showing the model is calculating a solution rather than simply recalling it."
+
+            # Generate likelihood assessment
+            if metrics["memorization_pct"] > 30 and metrics["uncertainty_pct"] < 10:
+                metrics["likelihood_assessment"] = "HIGH likelihood the model has seen similar problems during training and is recalling patterns."
+            elif metrics["reasoning_pct"] > 30 and (metrics["exploration_pct"] > 10 or metrics["uncertainty_pct"] > 10):
+                metrics["likelihood_assessment"] = "HIGH likelihood the model is reasoning through a new problem rather than recalling a solution."
+            else:
+                metrics["likelihood_assessment"] = "MEDIUM likelihood of either approach - model is using a mix of recall and reasoning."
+
+        return metrics
+
+
+class LLMReasoningFramework:
+    def __init__(self, models: List[Dict[str, Any]] = None):
+        """
+        Initialize the framework with specified models.
+        
+        Args:
+            models: List of model configurations
+        """
+        self.models = models or []
+        # Updated results DataFrame columns
+        self.results_df = pd.DataFrame()
+        
+        # Initialize model query handler
+        self.model_query_handler = ModelQueryHandler()
+        
+    def set_api_keys(self):
+        """Get API keys from environment or prompt the user"""
+        # Try to get from environment first
+        groq_key = os.getenv("GROQ_API_KEY")
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        mistral_key = os.getenv("MISTRAL_API_KEY")
+        
+        # Validate Groq API key if needed
+        if any(model["api"] == "groq" for model in self.models):
+            if not groq_key:
+                print("\nGroq API key not found in environment variables.")
+                groq_key = getpass.getpass("Enter your Groq API key: ")
+            # Validate Groq API key format
+            if not groq_key.startswith("gsk_"):
+                print("\nWarning: Groq API key appears invalid. It should start with 'gsk_'")
+                retry = input("Would you like to enter the key again? (y/n): ")
+                if retry.lower() == 'y':
+                    groq_key = getpass.getpass("Enter your Groq API key: ")
+            print("Groq API key validated")
+        
+        # Handle Gemini key similarly
+        if any(model["api"] == "gemini" for model in self.models):
+            if not gemini_key:
+                print("\nGemini API key not found in environment variables.")
+                gemini_key = getpass.getpass("Enter your Gemini API key: ")
+            
+        # Handle Mistral key similarly
+        if any(model["api"] == "mistral" for model in self.models):
+            if not mistral_key:
+                print("\nMistral API key not found in environment variables.")
+                mistral_key = getpass.getpass("Enter your Mistral API key: ")
+            # Validate Mistral API key format
+            if not mistral_key.startswith(""):  # Add validation if needed
+                print("\nWarning: Mistral API key appears invalid.")
+                retry = input("Would you like to enter the key again? (y/n): ")
+                if retry.lower() == 'y':
+                    mistral_key = getpass.getpass("Enter your Mistral API key: ")
+            print("Mistral API key validated")
+            
+        # Set API keys in the model query handler
+        self.model_query_handler.set_api_keys(groq_key, gemini_key, mistral_key)
+
+    def load_prompts(self, input_data: Union[str, List[str], List[Dict[str, str]]]) -> List[Dict[str, Any]]:
+        """
+        Load prompts from text, CSV, JSON file, or direct input.
+        
+        Args:
+            input_data: Can be:
+                - File path (str)
+                - Direct question (str)
+                - List of questions (List[str])
+                - List of prompt dictionaries (List[Dict[str, str]])
+                
+        Returns:
+            List of dictionaries with prompt IDs and text
+        """
+        prompts = []
+        
+        try:
+
+            # Check if it's a file path
+            if os.path.exists(input_data):
+                # Handle JSON file
+                if input_data.endswith('.json'):
+                    with open(input_data, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        # Handle list of prompts
+                        if isinstance(data, list):
+                            for i, item in enumerate(data):
+                                if isinstance(item, dict) and "modified_problem" in item:
+                                    prompts.append({
+                                        "question_id": item["question_id"],
+                                        "modified_problem": item["modified_problem"],
+                                        "problem_type": item["problem_type"],
+                                        "subject": item["subject"],
+                                        "level": item["level"],
+                                    })
+                                   
+    
+        except Exception as e:
+            print(f"Error loading prompts: {e}")
+            traceback.print_exc()
+            return []
+            
+            
+        return prompts
+    
+    def query_model(self, prompt: str, api: str, model: str, temperature: float = 0.0) -> Dict[str, Any]:
+        """
+        Query appropriate API based on api parameter.
+        
+        Args:
+            prompt: The prompt to send to the model
+            api: API type ('groq', 'gemini', or 'mistral')
+            model: Model name
+            temperature: Temperature setting
+            
+        Returns:
+            API response
+        """
+        return self.model_query_handler.query_model(prompt, api, model, temperature)
+    
+    def parse_response(self, response_text: str) -> Tuple[str, str, str, Optional[float]]:
+        """
+        Parse model response to extract answer, chain of thought, reasoning type, and confidence.
+        
+        Args:
+            response_text: Raw response from the model
+            
+        Returns:
+            Tuple of (answer, chain_of_thought, reasoning_type, confidence)
+        """
+        # Reasoning labels
+        reasoning_labels = ["Recall", "Reasoning", "Hallucination", "Uncertain"]
+        
+        # Default values
+        full_answer = response_text
+        chain_of_thought = ""
+        final_answer = response_text
+        reasoning_type = None
+        confidence = None
+        
+        # Extract the chain of thought part
+        # Look for common indicators of a step-by-step process
+        step_indicators = ["Step 1", "First,", "To solve this", "Let's break this down", 
+                          "I'll approach this", "Let me think", "Let's think", 
+                          "To determine", "Let's calculate"]
+        
+        # Look for a reasoning process followed by an answer
+        for indicator in step_indicators:
+            if indicator in response_text:
+                # Find where the final answer likely begins
+                answer_indicators = ["Therefore,", "So,", "In conclusion,", "Thus,", 
+                                     "The answer is", "This means", "To summarize", 
+                                     "Finally,", "In summary"]
+                
+                for ans_ind in answer_indicators:
+                    ans_parts = response_text.split(ans_ind)
+                    if len(ans_parts) > 1:
+                        chain_of_thought = ans_parts[0].strip()
+                        final_answer = ans_ind + ans_parts[1].strip()
+                        break
+                
+                if chain_of_thought:  # If we found a clean separation
+                    break
+        
+        # If no clear structure was found, use heuristic 
+        if not chain_of_thought:
+            # Try to split by paragraph
+            paragraphs = response_text.split("\n\n")
+            if len(paragraphs) > 1:
+                # Assume earlier paragraphs are reasoning and the last is the answer
+                chain_of_thought = "\n\n".join(paragraphs[:-1])
+                # final_answer = paragraphs[-1]
+            else:
+                pass
+                # No clear way to separate, leave as is
+                # final_answer = response_text
+        
+        # Parse the structured output format from the last line
+        lines = response_text.split('\n')
+        for line in reversed(lines):
+            if line.strip():  # Find last non-empty line
+                try:
+                    # Try to parse JSON-like structure from the line
+                    match = re.search(r"{'FINAL_ANSWER':\s*(.+?),\s*'LABEL':\s*(.+?),\s*'CONFIDENCE':\s*(.+?)}", line)
+                    if match:
+                        final_answer = match.group(1).strip()
+                        reasoning_type = match.group(2).strip()
+                        try:
+                            confidence = float(match.group(3).strip())
+                        except ValueError:
+                            confidence = None
+                        break
+                except:
+                    continue
+        
+        # Final cleanup
+        final_answer = final_answer.strip()
+        chain_of_thought = chain_of_thought.strip()
+        print("output", final_answer, chain_of_thought, reasoning_type, confidence)
+
+        return final_answer, chain_of_thought, reasoning_type, confidence
+    
+    def log_result(self, question_id: Any, modified_problem: str, api: str, model: str, 
+                  final_answer: str, chain_of_thought: str, reasoning_type: str, 
+                  confidence: Optional[float], response_time: float,
+                  annotations: List[str], reasoning_count_metrics: Dict[str, int], reasoning_pct_metrics: Dict[str, float],
+                  problem_type: str, subject: str, level: str,
+                  verification_check: str = "Not Verified") -> None:
+        """
+        Add a result to the DataFrame.
+        
+        Args:
+            question_id: Unique identifier for the question
+            modified_problem: The modified problem text
+            api: API used ('groq' or 'gemini')
+            model: Model name
+            answer: Model's answer
+            chain_of_thought: Step-by-step reasoning process
+            reasoning_type: Extracted reasoning type
+            confidence: Confidence score (if available)
+            response_time: Time taken for API response
+            annotations: Annotations for the reasoning chain
+            reasoning_count_metrics: Metrics for the reasoning chain
+            reasoning_pct_metrics: Percentage metrics for the reasoning chain
+            problem_type: Type of problem
+            subject: Subject of the problem
+            level: Level of the problem
+            verification_check: Result of verification checks
+        """
+        # Perform external evaluation
+        evaluation = "Pending"
+        if reasoning_type == "Reasoning" and verification_check not in ["Verified Reasoning", "Novel Reasoning Verified", "Strong Reasoning Evidence"]:
+            evaluation = "Potential False Reasoning Claim"
+        elif reasoning_type == "Recall" and verification_check in ["Verified Reasoning", "Novel Reasoning Verified"]:
+            evaluation = "Understated Reasoning Capability"
+        elif verification_check in ["Incorrect", "Misled by Context", "Distracted by Irrelevant Details"]:
+            evaluation = "Poor Reasoning"
+        else:
+            evaluation = "Consistent"
+        
+        # Create new row
+        # Convert metrics dicts to dataframes
+        count_metrics_df = pd.DataFrame([reasoning_count_metrics])
+        pct_metrics_df = pd.DataFrame([reasoning_pct_metrics])
+        
+        # Create base dataframe
+        new_row = pd.DataFrame({
+            "question_id": [question_id],
+            "modified_problem": [modified_problem],
+            "api": [api],
+            "model": [model],
+            "final_answer": [final_answer],
+            "chain_of_thought": [chain_of_thought],
+            "reasoning_type": [reasoning_type],
+            "confidence": [confidence],
+            "response_time": [response_time],
+            "problem_type": [problem_type],
+            "subject": [subject],
+            "level": [level],
+            "timestamp": [datetime.datetime.now()],
+            "annotations": [annotations],
+            # "evaluation": [evaluation],
+            # "verification_check": [verification_check]
+        })
+        
+        # Add metrics columns
+        for col in count_metrics_df.columns:
+            new_row[col] = count_metrics_df[col]
+        for col in pct_metrics_df.columns:
+            new_row[col] = pct_metrics_df[col]
+        # Add to DataFrame
+        self.results_df = pd.concat([self.results_df, new_row], ignore_index=True, sort=False)
+
+    def save_results(self, results_df: pd.DataFrame, file_name: str, format: str = "pkl") -> None:
+        """
+        Save results DataFrame to file.
+        
+        Args:
+            results_df: DataFrame containing results to save
+            file_path: Path for the output file
+            format: Output format ('pkl', 'csv', or 'json')
+        """
+        try:
+            # Create results directory if it doesn't exist
+            
+            # Update file path to be in results directory
+            file_path = f"{file_name}.{format}"
+            
+            if format.lower() == "csv":
+                # Handle potential encoding issues with CSV
+                results_df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                print(f"CSV saved: {file_path}")
+            elif format.lower() == "json":
+                # Convert DataFrame to JSON
+                json_data = results_df.to_json(orient="records", indent=2)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(json_data)
+                print(f"JSON saved: {file_path}")
+            else:
+                # Default to pickle format
+                results_df.to_pickle(file_path)
+                print(f"Pickle saved: {file_path}")
+                
+        except Exception as e:
+            print(f"Error saving results: {e}")
+            traceback.print_exc()
+
+    def analyze_reasoning_keyword(self, response):
         """
         Analyze reasoning for a given model response.
         """
+        reasoning_evaluation_keyword = ReasoningEvaluationKeyword()
         if response:
-            annotations, final_answer, reasoning_count_metrics = self.annotate_reasoning_chain(response)
-            reasoning_pct_metrics = self.compute_reasoning_metrics(annotations, final_answer, response, reasoning_count_metrics)
+            annotations, final_answer, reasoning_count_metrics = reasoning_evaluation_keyword.annotate_reasoning_chain(response)
+            reasoning_pct_metrics = reasoning_evaluation_keyword.compute_reasoning_metrics(annotations, final_answer, response, reasoning_count_metrics)
             return annotations, final_answer, reasoning_count_metrics, reasoning_pct_metrics
         else:
             return {}, "", {}, {}
 
+    def analyze_reasoning_self(self, response, model_config):
+        """
+        Analyze reasoning for a given model response using self-reasoning.
+        """
+        reasoning_evaluation_self = ReasoningSelfEvaluation(self.model_query_handler)
+        if response:
+            annotations = reasoning_evaluation_self.annotate_reasoning_chain_with_prompt(response, model_config)
+            annotations_self_parsed, keyword_counts = reasoning_evaluation_self.parse_reasoning_indicators(annotations)
+            reasoning_indicator_metrics = reasoning_evaluation_self.compute_annotation_metrics(annotations_self_parsed, keyword_counts)
+            return annotations, keyword_counts, reasoning_indicator_metrics
+        else:
+            return {}, {}
 
-    def run(self, input_data: Union[str, List[str], List[Dict[str, str]]], folder_name: str = "run_other",
+    def run(self, input_data: Union[str, List[str], List[Dict[str, str]]], is_self_reason: bool = False, folder_name: str = "run_other",
         output_file: str = "results.csv", output_format: str = "csv") -> None:
         """
         Run the framework on input data.
@@ -842,13 +1049,8 @@ class LLMReasoningFramework:
                         try:
                             # Query model
                             while True:
-                                # Create the chain-of-thought prompt first
-                                cot_prompt = prompt_text + CHAIN_OF_THOUGHT_PROMPT + BASE_META_PROMPT
-                                # Then add the meta-prompts for reasoning type and confidence
-                                full_prompt = cot_prompt + REASONING_META_PROMPT + CONFIDENCE_META_PROMPT + FORMAT_PROMPT
-
-                                response = self.query_model(
-                                    full_prompt,
+                                response = self.model_query_handler.query_model(
+                                    prompt_text,
                                     model_config["api"],
                                     model_config["model"],
                                     model_config.get("temperature", 0.0)
@@ -872,8 +1074,16 @@ class LLMReasoningFramework:
                             prepared_response = response["text"].replace("\\","\\\\")
                             # Parse response as a whole
                             answer, chain_of_thought, reasoning_type, confidence = self.parse_response(prepared_response)
-                            # analyze with reasoning indicators for annotations
-                            annotations, final_answer, reasoning_count_metrics, reasoning_pct_metrics = self.analyze_reasoning(prepared_response)
+                            # annotate reasoning chain using eval model
+                            if is_self_reason:
+                                annotations, keyword_counts, reasoning_indicator_metrics = self.analyze_reasoning_self(prepared_response, model_config)
+                                print("\n\nkeyword_counts : ", keyword_counts)
+                                print("\n\nannotations : ", annotations)
+                                print("\n\nreasoning_indicator_metrics : ", reasoning_indicator_metrics)
+                                # breakpoint()
+                            else:
+                                annotations, final_answer, reasoning_count_metrics, reasoning_pct_metrics = self.analyze_reasoning_keyword(prepared_response)
+                                reasoning_indicator_metrics = reasoning_count_metrics
                             
                             # Log result
                             self.log_result(
@@ -887,11 +1097,11 @@ class LLMReasoningFramework:
                                 confidence=confidence,
                                 response_time=response["response_time"],
                                 annotations=annotations,
-                                reasoning_count_metrics=reasoning_count_metrics,
-                                reasoning_pct_metrics=reasoning_pct_metrics,
                                 problem_type=problem_type,
                                 subject=subject,
                                 level=level,
+                                reasoning_count_metrics=reasoning_indicator_metrics if is_self_reason else reasoning_count_metrics,
+                                reasoning_pct_metrics=reasoning_pct_metrics if not is_self_reason else dict(),
                             )
                             
                         except Exception as e:
@@ -938,5 +1148,5 @@ if __name__ == "__main__":
 
     os.makedirs("results", exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    framework.run("../data/perplexmath-dataset.json", folder_name=f"run_{timestamp}_final_testing_gemini")
-    
+    # framework.run("../data/perplexmath-dataset.json", folder_name=f"run_{timestamp}_final_testing_123")
+    framework.run("../data/perplexmath-dataset_test.json", is_self_reason=True, folder_name=f"run_debug")
