@@ -10,6 +10,7 @@ from functools import partial
 from threading import Lock
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 
@@ -91,13 +92,81 @@ def wait_for_rate_limit():
         # Add current request time
         request_times.append(now)
 
-def get_problem_solution(problem_text, api_key):
-    """Get solution for a problem using Gemini API"""
-    # Configure API for this process
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
-    # 'gemini-1.5-flash' 'gemini-2.5-flash-preview-05-20'
+def get_openai_response(prompt, model="gpt-4-turbo-preview", temperature=0, max_tokens=1000):
+    """
+    Get response from OpenAI API for a given prompt.
+    
+    Args:
+        prompt (str): The input prompt to send to the model
+        model (str): The OpenAI model to use
+        temperature (float): Controls randomness in the response
+        max_tokens (int): Maximum number of tokens in the response
+        
+    Returns:
+        dict: A dictionary containing:
+            - success (bool): Whether the request was successful
+            - response (str): The model's response text
+            - error (str): Error message if any
+    """
+    try:
+        # Wait for rate limit before making request
+        wait_for_rate_limit()
+        
+        # Initialize OpenAI client
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        # Make API request
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        
+        # Extract response text
+        response_text = response.choices[0].message.content
+        
+        return {
+            "success": True,
+            "response": response_text,
+            "error": None
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "response": None,
+            "error": str(e)
+        }
 
+def get_openai_response_with_retry(prompt, max_retries=3, **kwargs):
+    """
+    Get response from OpenAI API with retry logic.
+    
+    Args:
+        prompt (str): The input prompt to send to the model
+        max_retries (int): Maximum number of retry attempts
+        **kwargs: Additional arguments to pass to get_openai_response
+        
+    Returns:
+        dict: Response from get_openai_response
+    """
+    for attempt in range(max_retries):
+        result = get_openai_response(prompt, **kwargs)
+        
+        if result["success"]:
+            return result
+            
+        print(f"Attempt {attempt + 1} failed: {result['error']}")
+        if attempt < max_retries - 1:
+            time.sleep(2 ** attempt)  # Exponential backoff
+            
+    return result
+
+def get_problem_solution(problem_text, api_key, model_type="gemini"):
+    """Get solution for a problem using either Gemini or OpenAI API"""
     # Prepare the prompt
     problem_text = problem_text.replace("\\", "\\\\")
     prompt = ANSWER_PROMPT_TEMPLATE.format(problem=problem_text)
@@ -105,28 +174,45 @@ def get_problem_solution(problem_text, api_key):
     try:
         attempts = 0
         max_attempts = 2
-        generation_config = {
-            "temperature": 0,
-            "max_output_tokens": 100000,
-        }
         
         while attempts < max_attempts:
             try:
                 # Wait for rate limit before making request
                 wait_for_rate_limit()
                 
-                response = model.generate_content(prompt, generation_config=generation_config)
-                
-                # Extract text from response
-                #check if max tokens reached
-                if "GenerateContentResponse" in response and "MAX_TOKENS" in response:
-                    print("Max output tokens reached")
-                    return None
-                
-                if isinstance(response, GenerateContentResponse) and response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-                    response_text = response.candidates[0].content.parts[0].text
-                else:
-                    response_text = str(response)
+                if model_type == "gemini":
+                    # Configure API for this process
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
+                    generation_config = {
+                        "temperature": 0,
+                        "max_output_tokens": 100000,
+                    }
+                    response = model.generate_content(prompt, generation_config=generation_config)
+                    
+                    # Extract text from response
+                    if "GenerateContentResponse" in response and "MAX_TOKENS" in response:
+                        print("Max output tokens reached")
+                        return None
+                    
+                    if isinstance(response, GenerateContentResponse) and response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                        response_text = response.candidates[0].content.parts[0].text
+                    else:
+                        response_text = str(response)
+                        
+                else:  # OpenAI
+                    result = get_openai_response_with_retry(
+                        prompt,
+                        model="gpt-4.1-nano",
+                        temperature=0,
+                        max_tokens=100000
+                    )
+                    
+                    if not result["success"]:
+                        print(f"OpenAI API error: {result['error']}")
+                        return None
+                        
+                    response_text = result["response"]
                 
                 # Clean up and parse JSON response
                 response_text = response_text.strip()
@@ -134,15 +220,15 @@ def get_problem_solution(problem_text, api_key):
                 if "GenerateContentResponse" in response_text and "MAX_TOKENS" in response_text:
                     print("Max output tokens reached")
                     return None
+                    
                 # Remove markdown code blocks if present
                 if response_text.startswith('```json'):
                     response_text = response_text.replace('```json', '').replace('```', '')
                 elif response_text.startswith('```'):
                     response_text = response_text.replace('```', '')
                 response_text = response_text.replace("\\", "\\\\")
-                # print("response_text", response_text)
-                # breakpoint()
-                # Try JSON parsing first
+                
+                # Try JSON parsing
                 try:
                     solution_data = extract_fields(response_text)
                     print("extracted-------------------------------")
@@ -159,7 +245,6 @@ def get_problem_solution(problem_text, api_key):
                     missing_fields = [field for field in ["final_answer", "reasoning", "solution_code"] 
                                    if not solution_data.get(field)]
                     print(f"Missing required fields in solution: {', '.join(missing_fields)}")
-                    # response gneerated but not parsable
                     return solution_data
                     
             except Exception as e:
@@ -176,7 +261,7 @@ def get_problem_solution(problem_text, api_key):
 
 def process_problem(args):
     """Process a single problem and return results"""
-    problem, api_key = args
+    problem, api_key, model_type = args
     problem_type = problem.get('problem_type', '')
     
     # Handle irrelevant info problems directly
@@ -189,7 +274,7 @@ def process_problem(args):
     # For other problem types, use API
     modified_problem = problem.get('modified_problem', '')
     if modified_problem:
-        solution = get_problem_solution(modified_problem, api_key)
+        solution = get_problem_solution(modified_problem, api_key, model_type)
         if solution:
             if 'reasoning' in solution:
                 problem['reasoning'] = solution['reasoning']
@@ -221,10 +306,11 @@ def update_output_file(problem, output_file):
         print(f"Error updating output file: {str(e)}")
 
 def main():
-    
-    API_KEY = os.getenv("GEMINI_API_KEY")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     INPUT_FILE = "perplexmath-dataset.json"
-    OUTPUT_FILE = "perplexmath-generated-answers.json" #using gemini-2.5-flash-preview-05-20
+    OUTPUT_FILE = "perplexmath-generated-answers-openai.json"
+    MODEL_TYPE = "openai"  # or "gemini"
 
     # Delete output file if it exists
     try:
@@ -243,11 +329,12 @@ def main():
         return
 
     # Create a pool of workers
-    num_processes = 5 #mp.cpu_count() - 1  # Leave one CPU free
+    num_processes = 5
     pool = mp.Pool(processes=num_processes)
 
     # Prepare arguments for each problem
-    problem_args = [(problem, API_KEY) for problem in problems]
+    api_key = OPENAI_API_KEY if MODEL_TYPE == "openai" else GEMINI_API_KEY
+    problem_args = [(problem, api_key, MODEL_TYPE) for problem in problems]
 
     # Process problems in parallel with progress bar
     results = []
@@ -267,23 +354,23 @@ def main():
 
     # Save failed question IDs
     # Load problems from both files
-    with open('modified_math_problems_with_answers.json', 'r') as f:
+    with open('perplexmath-generated-answers-openai.json', 'r') as f:
         completed_problems = json.load(f)
-    with open('new_modified_math_problems_with_question_id.json', 'r') as f:
+    with open('perplexmath-dataset.json', 'r') as f:
         all_problems = json.load(f)
         
     # Get question IDs of completed problems
     completed_question_ids = set(p['question_id'] for p in completed_problems)
     
-    # Find question IDs that are in all_problems but not in completed_problems
-    missing_question_ids = [p['question_id'] for p in all_problems 
+    # Find questions that are in all_problems but not in completed_problems
+    missing_questions = [p for p in all_problems 
                           if p['question_id'] not in completed_question_ids]
     
     # Save missing question IDs to file
-    if missing_question_ids:
-        with open('missing_question_ids.txt', 'w') as f:
-            f.write('\n'.join(missing_question_ids))
-        print(f"\nSaved {len(missing_question_ids)} missing question IDs to missing_question_ids.txt")
+    if missing_questions:
+        with open('missing_questions.json', 'w') as f:
+            json.dump(missing_questions, f, indent=2)
+        print(f"\nSaved {len(missing_questions)} missing questions to missing_questions.json")
 
 if __name__ == "__main__":
     main()
