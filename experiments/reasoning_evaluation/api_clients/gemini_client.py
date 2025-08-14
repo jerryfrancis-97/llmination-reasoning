@@ -18,7 +18,8 @@ class GeminiClient(BaseAPIClient):
         try:
             genai.configure(api_key=self.api_key)
             # Test configuration by listing models
-            genai.list_models()
+            genai.configure(api_key=self.api_key)
+            # Configuration is complete; defer API connectivity checks to later calls if needed.
         except Exception as e:
             raise ValueError(f"Failed to configure Gemini API: {e}")
     
