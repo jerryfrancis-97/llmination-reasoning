@@ -1,22 +1,18 @@
 import json
-import google.generativeai as genai
-from google.generativeai.types import GenerateContentResponse
 import time
 import re
 import os
 from tqdm import tqdm
 import multiprocessing as mp
 from functools import partial
-from threading import Lock
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
-
-load_dotenv()
+from config import Config
+from api_clients import create_api_client
+from rate_limiter import RateLimiter
+from response_parser import ResponseParser
 
 # Rate limiting configuration
-REQUESTS_PER_MINUTE = 15
-request_times = []
-request_lock = Lock()
+rate_limiter = RateLimiter()
 
 # Prompt template for getting answers
 ANSWER_PROMPT_TEMPLATE = """
@@ -40,30 +36,7 @@ Format your response exactly like this:
 }}
 """
 
-def extract_fields(text):
-    """Extract fields from response text using string find"""
-    # Find final_answer
-    final_start = text.find('"final_answer\": \"') + len('"final_answer\": \"')
-    final_end = text.find('\",\n', final_start)
-    final_answer = text[final_start:final_end] if final_start > -1 and final_end > -1 else None
-    if final_answer:
-        final_answer = final_answer.replace("\\\\", "\\")
-
-    # Find reasoning 
-    reason_start = text.find('\"reasoning\": \"') + len('\"reasoning\": \"')
-    reason_end = text.find('\",\n ', reason_start)
-    reasoning = text[reason_start:reason_end] if reason_start > -1 and reason_end > -1 else None
-
-    # Find solution code
-    code_start = text.find('\"solution_code\": \"') + len('\"solution_code\": \"')
-    code_end = text.rfind('\"\n}\n')
-    solution_code = text[code_start:code_end].replace('\\n', '\n') if code_start > -1 and code_end > -1 else None
-
-    return {
-        "final_answer": final_answer,
-        "reasoning": reasoning, 
-        "solution_code": solution_code
-    }
+# extract_fields function removed - now handled by ResponseParser class
 
 def load_problems(file_path):
     """Load problems from JSON file"""
@@ -74,77 +47,52 @@ def load_problems(file_path):
         print(f"Error loading problems: {str(e)}")
         return []
 
-def wait_for_rate_limit():
-    """Wait if necessary to stay within rate limits"""
-    with request_lock:
-        now = datetime.now()
-        # Remove requests older than 1 minute
-        while request_times and now - request_times[0] > timedelta(minutes=1):
-            request_times.pop(0)
-        
-        # If at rate limit, wait until oldest request expires
-        if len(request_times) >= REQUESTS_PER_MINUTE:
-            wait_time = (request_times[0] + timedelta(minutes=1) - now).total_seconds()
-            if wait_time > 0:
-                time.sleep(wait_time)
-                
-        # Add current request time
-        request_times.append(now)
+# Rate limiting function removed - now handled by RateLimiter class
 
-def get_problem_solution(problem_text, api_key):
-    """Get solution for a problem using Gemini API"""
-    # Configure API for this process
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
-    # 'gemini-1.5-flash' 'gemini-2.5-flash-preview-05-20'
+# OpenAI response function removed - now handled by OpenAIClient class
 
+# OpenAI retry function removed - now handled by OpenAIClient class
+
+def get_problem_solution(problem_text, api_key, model_type="gemini"):
+    """Get solution for a problem using either Gemini or OpenAI API"""
     # Prepare the prompt
     problem_text = problem_text.replace("\\", "\\\\")
     prompt = ANSWER_PROMPT_TEMPLATE.format(problem=problem_text)
 
     try:
         attempts = 0
-        max_attempts = 2
-        generation_config = {
-            "temperature": 0,
-            "max_output_tokens": 100000,
-        }
+        max_attempts = Config.MAX_ATTEMPTS
+        
+        # Create API client
+        try:
+            api_client = create_api_client(model_type, api_key, rate_limiter)
+        except ValueError as e:
+            print(f"Error creating API client: {str(e)}")
+            return None
         
         while attempts < max_attempts:
             try:
-                # Wait for rate limit before making request
-                wait_for_rate_limit()
+                # Get response from API client (rate limiting handled internally)
+                result = api_client.generate_response(prompt)
                 
-                response = model.generate_content(prompt, generation_config=generation_config)
+                if not result["success"]:
+                    print(f"API error: {result['error']}")
+                    attempts += 1
+                    time.sleep(2)
+                    continue
                 
-                # Extract text from response
-                #check if max tokens reached
-                if "GenerateContentResponse" in response and "MAX_TOKENS" in response:
+                response_text = result["response"]
+                
+                # Clean up and parse JSON response using ResponseParser
+                response_text = ResponseParser.clean_response_text(response_text)
+                
+                if ResponseParser.is_max_tokens_reached(response_text):
                     print("Max output tokens reached")
                     return None
                 
-                if isinstance(response, GenerateContentResponse) and response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-                    response_text = response.candidates[0].content.parts[0].text
-                else:
-                    response_text = str(response)
-                
-                # Clean up and parse JSON response
-                response_text = response_text.strip()
-                
-                if "GenerateContentResponse" in response_text and "MAX_TOKENS" in response_text:
-                    print("Max output tokens reached")
-                    return None
-                # Remove markdown code blocks if present
-                if response_text.startswith('```json'):
-                    response_text = response_text.replace('```json', '').replace('```', '')
-                elif response_text.startswith('```'):
-                    response_text = response_text.replace('```', '')
-                response_text = response_text.replace("\\", "\\\\")
-                # print("response_text", response_text)
-                # breakpoint()
-                # Try JSON parsing first
+                # Try JSON parsing
                 try:
-                    solution_data = extract_fields(response_text)
+                    solution_data = ResponseParser.extract_fields(response_text)
                     print("extracted-------------------------------")
                     print(solution_data)
                 except Exception as e:
@@ -152,14 +100,12 @@ def get_problem_solution(problem_text, api_key):
                     solution_data = None
                 
                 # Verify we have all required fields
-                if all(solution_data.get(field) for field in ["final_answer", "reasoning", "solution_code"]):
+                is_valid, missing_fields = ResponseParser.validate_solution_data(solution_data)
+                if is_valid:
                     return solution_data
                 else:
                     # Print which fields are missing
-                    missing_fields = [field for field in ["final_answer", "reasoning", "solution_code"] 
-                                   if not solution_data.get(field)]
                     print(f"Missing required fields in solution: {', '.join(missing_fields)}")
-                    # response gneerated but not parsable
                     return solution_data
                     
             except Exception as e:
@@ -176,7 +122,7 @@ def get_problem_solution(problem_text, api_key):
 
 def process_problem(args):
     """Process a single problem and return results"""
-    problem, api_key = args
+    problem, api_key, model_type = args
     problem_type = problem.get('problem_type', '')
     
     # Handle irrelevant info problems directly
@@ -189,7 +135,7 @@ def process_problem(args):
     # For other problem types, use API
     modified_problem = problem.get('modified_problem', '')
     if modified_problem:
-        solution = get_problem_solution(modified_problem, api_key)
+        solution = get_problem_solution(modified_problem, api_key, model_type)
         if solution:
             if 'reasoning' in solution:
                 problem['reasoning'] = solution['reasoning']
@@ -221,21 +167,18 @@ def update_output_file(problem, output_file):
         print(f"Error updating output file: {str(e)}")
 
 def main():
-    
-    API_KEY = os.getenv("GEMINI_API_KEY")
-    INPUT_FILE = "perplexmath-dataset.json"
-    OUTPUT_FILE = "perplexmath-generated-answers.json" #using gemini-2.5-flash-preview-05-20
+    # Configuration is now centralized in Config class
 
     # Delete output file if it exists
     try:
-        os.remove(OUTPUT_FILE)
-        print(f"Deleted existing {OUTPUT_FILE} to start clean")
+        os.remove(Config.OUTPUT_FILE)
+        print(f"Deleted existing {Config.OUTPUT_FILE} to start clean")
     except FileNotFoundError:
         pass
 
     # Load problems 
-    print(f"Loading problems from {INPUT_FILE}...")
-    problems = load_problems(INPUT_FILE)
+    print(f"Loading problems from {Config.INPUT_FILE}...")
+    problems = load_problems(Config.INPUT_FILE)
     print(f"Loaded {len(problems)} problems")
 
     if len(problems) == 0:
@@ -243,11 +186,11 @@ def main():
         return
 
     # Create a pool of workers
-    num_processes = 5 #mp.cpu_count() - 1  # Leave one CPU free
-    pool = mp.Pool(processes=num_processes)
+    pool = mp.Pool(processes=Config.NUM_PROCESSES)
 
     # Prepare arguments for each problem
-    problem_args = [(problem, API_KEY) for problem in problems]
+    api_key = Config.OPENAI_API_KEY if Config.MODEL_TYPE == "openai" else Config.GEMINI_API_KEY
+    problem_args = [(problem, api_key, Config.MODEL_TYPE) for problem in problems]
 
     # Process problems in parallel with progress bar
     results = []
@@ -256,7 +199,7 @@ def main():
         if success:
             print("Successfully added solution")
             # Update output file immediately after each successful solution
-            update_output_file(problem, OUTPUT_FILE)
+            update_output_file(problem, Config.OUTPUT_FILE)
             results.append(problem)
         else:
             print("Failed to get solution")
@@ -267,23 +210,23 @@ def main():
 
     # Save failed question IDs
     # Load problems from both files
-    with open('modified_math_problems_with_answers.json', 'r') as f:
+    with open(Config.OUTPUT_FILE, 'r') as f:
         completed_problems = json.load(f)
-    with open('new_modified_math_problems_with_question_id.json', 'r') as f:
+    with open(Config.INPUT_FILE, 'r') as f:
         all_problems = json.load(f)
         
     # Get question IDs of completed problems
     completed_question_ids = set(p['question_id'] for p in completed_problems)
     
-    # Find question IDs that are in all_problems but not in completed_problems
-    missing_question_ids = [p['question_id'] for p in all_problems 
+    # Find questions that are in all_problems but not in completed_problems
+    missing_questions = [p for p in all_problems 
                           if p['question_id'] not in completed_question_ids]
     
     # Save missing question IDs to file
-    if missing_question_ids:
-        with open('missing_question_ids.txt', 'w') as f:
-            f.write('\n'.join(missing_question_ids))
-        print(f"\nSaved {len(missing_question_ids)} missing question IDs to missing_question_ids.txt")
+    if missing_questions:
+        with open('missing_questions.json', 'w') as f:
+            json.dump(missing_questions, f, indent=2)
+        print(f"\nSaved {len(missing_questions)} missing questions to missing_questions.json")
 
 if __name__ == "__main__":
     main()
