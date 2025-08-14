@@ -6,6 +6,7 @@ Main entry point for the refactored reasoning evaluation framework.
 import datetime
 import os
 from framework.llm_reasoning_framework import LLMReasoningFramework
+from ..analysis_orchestrator import AnalysisOrchestrator
 
 def main():
     """Main entry point for the analysis script."""
