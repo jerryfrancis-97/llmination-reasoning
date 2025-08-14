@@ -82,6 +82,7 @@ class ResponseParser:
                             confidence = None
                         return final_answer, reasoning_type, confidence
                 except:
+                except (AttributeError, IndexError, TypeError):
                     continue
         
         return text, None, None
