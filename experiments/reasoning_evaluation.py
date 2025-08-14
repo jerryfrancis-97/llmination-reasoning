@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Legacy imports kept for backward compatibility
 import os
 import time
 import json
@@ -15,8 +16,8 @@ from dotenv import load_dotenv
 import traceback
 import google.generativeai as genai
 from tqdm import tqdm
-from groq import Groq  # Add Groq client import
-from mistralai import Mistral  # Updated Mistral import
+from groq import Groq
+from mistralai import Mistral
 
 # Load environment variables
 load_dotenv("../.env")
