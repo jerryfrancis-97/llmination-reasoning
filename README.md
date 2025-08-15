@@ -1,5 +1,7 @@
 # PerplexMATH Dataset: Steering LLMs Towards Mathematical Reasoning
-Repo for LLM reasoning work
+
+## Abstract
+Large language models (LLMs) have demonstrated unprecedented progress in their reasoning abilities, significantly enhancing their capacity to tackle both mathematical and logical problems. However, when increasing the difficulty of math problems, these models under-perform in many areas. Furthermore, their reasoning becomes "brittle" as performance drops when the math problems are slightly changed in structure or additional information is introduced. This questions the validity of the reasoning an LLM performs. This study investigates whether large language models (LLMs) **balance memorization and reasoning** when solving hard math problems with some perturbations. Through systematic evaluation of different LLMs, we see that some models *selectively* use recall strategy, while others exhibit better reasoning performance for certain problem types. Results reveal a computation-reasoning trade-off: models solve computationally intensive problems faster but with 50% less engagement, suggesting heuristic shortcuts under load. Confidence scores remain high but unstable in challenging tasks, raising reliability concerns. DeepSeek exhibits the sharpest trade-off, Gemini 1.5 handles paradoxes best, while Gemini 2.0 provides more stable confidence estimates. We introduce **PerplexMATH**, a hard math problem dataset with different problem types along with a reasoning framework for evaluating LLMs with more robust, human-like reasoning capabilities specifically for math problems.
 
 ## Repo Structure
 - data/ : Contains Python and JSON files to generate dataset
@@ -18,13 +20,14 @@ First, fill the `.env` file in the root directory with your API keys:
 
 This repository provides several scripts and notebooks for evaluating and analyzing the reasoning capabilities of LLMs, especially on mathematical and logic problems. Below is a guide to the main files and how to use them.
 
-Installing libraries and activating environment
-PIP
+### Installing Libraries and Activating Environment
+
+#### PIP
 1. Set up a virtual environment by running: `python3 -m venv simple_env`
 2. Activate the environment and install dependencies with: `pip3 install -r requirements.txt`
-3. TO see all libs, use `pip3 list`
+3. To see all libs, use `pip3 list`
 
-CONDA
+#### CONDA
 1. Create a conda environment from the provided YAML file (e.g., `environment.yml`):
    ```bash
    conda env create -f environment.yml
@@ -41,7 +44,6 @@ CONDA
    ```
 
 To run the main scripts, use the following commands:
-Use the following,
 
 - Run `python3 data/fixing_problems.py` to generate the PerplexMATH dataset.
 - Run `python3 experiments/reasoning_evaluation.py` to obtain experiment results.
@@ -66,11 +68,11 @@ This is the main script for running large-scale reasoning evaluations on LLMs. I
    - Install dependencies: `pip install -r requirements.txt`
    - Set your API keys in `.env` (see above).
 
-3. **Customizing:**
+2. **Customizing:**
    - To use a different dataset, change the path in the `framework.run()` call.
    - To use different models/APIs, edit the `models` list in the script.
 
-4. **Results:**
+3. **Results:**
    - Results are saved in the `results/` directory, organized by run and model.
    - Each run produces CSV and JSON files with detailed annotations and metrics.
 
@@ -99,29 +101,26 @@ A utility script for extracting and post-processing final answers from model out
 
 **How to Run:**
 
+---
 
+## Extra Instructions
 
-
-
-
-
-
-# Extra Instructions
-
-- For lambda compute setup
+### Lambda Compute Setup
 1. Start an instance and open the jupyter lab
 2. Open the terminal in jupyter lab
 3. Use the command export to add environment variables
 
-export GIT_TOKEN=< from GIT Personal Access token, while creating select the repo scope>
+```bash
+export GIT_TOKEN=<from GIT Personal Access token, while creating select the repo scope>
 export OPENROUTER_API_KEY=<from openrouter.com API>
 export GEMINI_API_KEY=<from google ai studio>
+```
 
-or create a .env file.
+Or create a `.env` file.
 
-4. Take the file deploy-llm-exp.sh from the repo and place it in the gpu's jupyter directory.
-5. Run chmod u+x deploy-llm-exp.sh on terminal
-6. Run ./deploy-llm-exp.sh on terminal
+4. Take the file `deploy-llm-exp.sh` from the repo and place it in the gpu's jupyter directory.
+5. Run `chmod u+x deploy-llm-exp.sh` on terminal
+6. Run `./deploy-llm-exp.sh` on terminal
 
 
 
